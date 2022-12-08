@@ -1,0 +1,20 @@
+[package]
+name = "cuda-viewer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ash = { version = "0.37", features = ["linked", "debug"] }
+ash-window = "0.12"
+raw-window-handle = "0.5"
+winit = "0.27"
+shaderc = "0.8"
+colored = "2.0"
+
+[build-dependencies]
+cbindgen = "0.24"
