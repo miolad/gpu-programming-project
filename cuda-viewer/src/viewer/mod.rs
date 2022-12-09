@@ -83,7 +83,7 @@ type SyncObjects = (Box<[vk::Fence; FRAMES_IN_FLIGHT]>, Box<[vk::Semaphore; FRAM
 impl Viewer {
     pub fn new(event_loop: &EventLoop<()>, cuda_buffer_handle: *mut c_void, cuda_buffer_size: u64, res_x: u32, res_y: u32, device_uuid: &[u8]) -> Self {
         unsafe {
-            let entry = Box::new(Entry::linked());
+            let entry = Box::new(Entry::load().expect("Vulkan is not available"));
             
             let window = Self::init_window(event_loop, res_x, res_y);
             Self::init_vulkan(entry, window, cuda_buffer_handle, cuda_buffer_size, device_uuid)
@@ -99,12 +99,17 @@ impl Viewer {
 
 impl Viewer {
     unsafe fn init_vulkan(entry: Box<Entry>, window: Window, cuda_buffer_handle: *mut c_void, cuda_buffer_size: u64, device_uuid: &[u8]) -> Self {
-        let instance = Box::new(Self::create_instance(&entry, &window));
-        let (debug_loader, debug_utils_messenger) = Self::setup_debug_messenger(&entry, &instance);
+        let use_validation = if USE_VALIDATION {
+            Self::check_validation_layer_support(&entry)
+        } else {
+            false
+        };
+        let instance = Box::new(Self::create_instance(&entry, &window, use_validation));
+        let (debug_loader, debug_utils_messenger) = Self::setup_debug_messenger(&entry, &instance, use_validation);
         let surface_loader = Surface::new(&entry, &instance);
         let surface = ash_window::create_surface(&entry, &instance, window.raw_display_handle(), window.raw_window_handle(), None).expect("Couldn't create surface");
         let (physical_device, device, queue, present_queue, graphics_queue_family, present_queue_family) = 
-            Self::pick_device(&instance, &surface_loader, &surface, device_uuid);
+            Self::pick_device(&instance, &surface_loader, &surface, device_uuid, use_validation);
         let (swapchain_loader, swapchain, format, swapchain_extent) =
             Self::create_swapchain(&instance, &device, &window, &surface_loader, surface, physical_device, From::from([graphics_queue_family, present_queue_family]));
         let swapchain_images = Self::get_swapchain_images(&device, &swapchain_loader, swapchain, format);
@@ -650,7 +655,8 @@ impl Viewer {
         instance: &Instance,
         surface_loader: &Surface,
         surface: &vk::SurfaceKHR,
-        physical_device_uuid: &[u8]
+        physical_device_uuid: &[u8],
+        use_validation: bool
     ) -> (vk::PhysicalDevice, Box<Device>, vk::Queue, vk::Queue, u32, u32)
     {
         let ret = instance.enumerate_physical_devices()
@@ -753,7 +759,7 @@ impl Viewer {
                         
                         let mut layers = vec![];
                         
-                        if USE_VALIDATION {
+                        if use_validation {
                             layers.extend(VALIDATION_LAYERS.iter().map(|l| l.as_ptr()));
                         }
 
@@ -796,7 +802,7 @@ impl Viewer {
         ret
     }
 
-    unsafe fn create_instance(entry: &Entry, window: &Window) -> ash::Instance {
+    unsafe fn create_instance(entry: &Entry, window: &Window, use_validation: bool) -> ash::Instance {
         let app_info = vk::ApplicationInfo::builder()
             .application_name(CStr::from_bytes_with_nul_unchecked(b"CUDA PathTracing Viewer\0"))
             .application_version(1)
@@ -804,14 +810,10 @@ impl Viewer {
             .engine_version(1)
             .api_version(vk::API_VERSION_1_3);
 
-        if USE_VALIDATION && !Self::check_validation_layer_support(entry) {
-            panic!("Validation layers requested but not available!");
-        }
-
-        let extension_names = Self::get_required_extensions(window);
+        let extension_names = Self::get_required_extensions(window, use_validation);
         let mut layer_names = vec![];
             
-        if USE_VALIDATION {
+        if use_validation {
             layer_names.extend(VALIDATION_LAYERS.iter().map(|&layer| layer.as_ptr()));
         }
 
@@ -822,7 +824,7 @@ impl Viewer {
 
         let mut debug_messenger_create_info = Self::create_debug_utils_debug_messenger_create_info();
             
-        let create_info = if USE_VALIDATION {
+        let create_info = if use_validation {
             create_info.push_next(&mut debug_messenger_create_info)
         } else {
             create_info
@@ -843,20 +845,20 @@ impl Viewer {
             .all(|&l| layers.contains(&l.to_owned()))
     }
 
-    unsafe fn get_required_extensions(window: &Window) -> Vec<*const c_char> {
+    unsafe fn get_required_extensions(window: &Window, use_validation: bool) -> Vec<*const c_char> {
         let mut extension_names = ash_window::enumerate_required_extensions(window.raw_display_handle())
             .unwrap()
             .to_vec();
 
-        if USE_VALIDATION {
+        if use_validation {
             extension_names.push(DebugUtils::name().as_ptr());
         }
 
         extension_names
     }
 
-    unsafe fn setup_debug_messenger(entry: &Entry, instance: &Instance) -> (Option<DebugUtils>, Option<vk::DebugUtilsMessengerEXT>) {
-        if !USE_VALIDATION {
+    unsafe fn setup_debug_messenger(entry: &Entry, instance: &Instance, use_validation: bool) -> (Option<DebugUtils>, Option<vk::DebugUtilsMessengerEXT>) {
+        if !use_validation {
             (None, None)
         } else {
             let debug_utils = DebugUtils::new(entry, instance);

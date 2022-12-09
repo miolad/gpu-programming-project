@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = { version = "0.37", features = ["linked", "debug"] }
+ash = { version = "0.37", features = ["loaded", "debug"] }
 ash-window = "0.12"
 raw-window-handle = "0.5"
 winit = "0.27"
