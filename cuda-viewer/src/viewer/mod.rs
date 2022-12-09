@@ -236,23 +236,13 @@ impl Viewer {
         self.record_command_buffer(self.command_buffers[frame_index], image_index as _);
 
         // Submit the command buffer making sure to properly sync with the `image_acquired_semaphore`
-        let submit_semaphore_wait_info = vk::SemaphoreSubmitInfo::builder()
-            .semaphore(self.image_acquired_semaphores[frame_index])
-            .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT);
+        let submit_info = vk::SubmitInfo::builder()
+            .wait_semaphores(std::slice::from_ref(&self.image_acquired_semaphores[frame_index]))
+            .wait_dst_stage_mask(std::slice::from_ref(&vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT))
+            .command_buffers(std::slice::from_ref(&self.command_buffers[frame_index]))
+            .signal_semaphores(std::slice::from_ref(&self.render_done_semaphores[frame_index]));
 
-        let submit_semaphore_signal_info = vk::SemaphoreSubmitInfo::builder()
-            .semaphore(self.render_done_semaphores[frame_index])
-            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS);
-
-        let command_buffer_submit_info = vk::CommandBufferSubmitInfo::builder()
-            .command_buffer(self.command_buffers[frame_index]);
-        
-        let submit_info = vk::SubmitInfo2::builder()
-            .wait_semaphore_infos(std::slice::from_ref(&submit_semaphore_wait_info))
-            .command_buffer_infos(std::slice::from_ref(&command_buffer_submit_info))
-            .signal_semaphore_infos(std::slice::from_ref(&submit_semaphore_signal_info));
-        
-        self.device.queue_submit2(self.queue, std::slice::from_ref(&submit_info), self.render_done_fences[frame_index]).unwrap();
+        self.device.queue_submit(self.queue, std::slice::from_ref(&submit_info), self.render_done_fences[frame_index]).unwrap();
 
         // Present the image to the screen after it's done rendering
         let present_info = vk::PresentInfoKHR::builder()
@@ -679,7 +669,7 @@ impl Viewer {
                 let api_version = physical_device_properties.properties.api_version;
                 let api_version_sufficient = match vk::api_version_major(api_version) {
                     0 => false,
-                    1 => vk::api_version_minor(api_version) >= 3,
+                    1 => vk::api_version_minor(api_version) >= 2,
                     2.. => true,
                 };
                 if !api_version_sufficient {
@@ -750,12 +740,9 @@ impl Viewer {
                             .build();
                         let mut vk12_device_features = vk::PhysicalDeviceVulkan12Features::builder()
                             .buffer_device_address(true);
-                        let mut vk13_device_features = vk::PhysicalDeviceVulkan13Features::builder()
-                            .synchronization2(true);
                         let mut extended_features = vk::PhysicalDeviceFeatures2::builder()
                             .features(device_features)
-                            .push_next(&mut vk12_device_features)
-                            .push_next(&mut vk13_device_features);
+                            .push_next(&mut vk12_device_features);
                         
                         let mut layers = vec![];
                         
@@ -808,7 +795,7 @@ impl Viewer {
             .application_version(1)
             .engine_name(CStr::from_bytes_with_nul_unchecked(b"No Engine\0"))
             .engine_version(1)
-            .api_version(vk::API_VERSION_1_3);
+            .api_version(vk::API_VERSION_1_2);
 
         let extension_names = Self::get_required_extensions(window, use_validation);
         let mut layer_names = vec![];
