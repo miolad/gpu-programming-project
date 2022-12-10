@@ -3,8 +3,6 @@
 #include <cuda.h>
 #include <cudaviewer.h>
 
-#include <rapidobj.hpp>
-
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
