@@ -1,13 +1,18 @@
 mod shaders;
 
+#[cfg(feature = "shaderc")]
+use shaderc::ShaderKind;
+#[cfg(feature = "shaderc")]
+use shaders::ShaderCompiler;
+#[cfg(feature = "shaderc")]
+use colored::{Color, Colorize};
+use shaders::create_vk_shader_module;
+
 use core::ffi::{CStr, c_char};
 use std::{os::raw::c_void, collections::HashSet};
 use ash::{vk::{self, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCallbackDataEXT, Bool32}, Entry, extensions::{ext::DebugUtils, khr::{Surface, Swapchain}}, Instance, Device};
-use colored::{Color, Colorize};
-use shaderc::ShaderKind;
 use winit::{window::{WindowBuilder, Window}, dpi::PhysicalSize, event_loop::{EventLoop, ControlFlow}, event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, ElementState}, platform::run_return::EventLoopExtRunReturn};
 use raw_window_handle::{HasRawWindowHandle, HasRawDisplayHandle};
-use shaders::{ShaderCompiler, create_vk_shader_module};
 
 const USE_VALIDATION: bool = cfg!(debug_assertions);
 const VALIDATION_LAYERS: [&CStr; 1] = unsafe {[
@@ -28,6 +33,7 @@ unsafe extern "system" fn debug_callback(
     p_callback_data: *const DebugUtilsMessengerCallbackDataEXT,
     _p_user_data: *mut c_void
 ) -> Bool32 {
+    #[cfg(feature = "shaderc")]
     let color = match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => Color::Red,
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => Color::Yellow,
@@ -38,7 +44,10 @@ unsafe extern "system" fn debug_callback(
     };
     
     if message_severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
+        #[cfg(feature = "shaderc")]
         println!("{}: {}", "Validation layer".color(color), CStr::from_ptr((*p_callback_data).p_message).to_string_lossy());
+        #[cfg(not(feature = "shaderc"))]
+        println!("Validation layer: {}", CStr::from_ptr((*p_callback_data).p_message).to_string_lossy());
     }
 
     vk::FALSE
@@ -416,8 +425,9 @@ impl Viewer {
     }
 
     unsafe fn create_graphics_pipeline(device: &Device, render_pass: vk::RenderPass) -> (vk::PipelineLayout, vk::Pipeline) {
+        #[cfg(feature = "shaderc")]
         let shader_compiler = ShaderCompiler::new().unwrap();
-        
+        #[cfg(feature = "shaderc")]
         let vertex_shader_module = {
             let (binary, warnings) = shader_compiler.compile(
                 "fs_quad.vert",
@@ -428,7 +438,7 @@ impl Viewer {
 
             create_vk_shader_module(device, &binary).unwrap()
         };
-
+        #[cfg(feature = "shaderc")]
         let fragment_shader_module = {
             let (binary, warnings) = shader_compiler.compile(
                 "buf_display.frag",
@@ -438,6 +448,23 @@ impl Viewer {
             println!("buf_display.frag: {}", warnings);
 
             create_vk_shader_module(device, &binary).unwrap()
+        };
+
+        #[cfg(not(feature = "shaderc"))]
+        let vertex_shader_module = {
+            let binary = std::fs::read("../cuda-viewer/src/shaders/fs_quad.vert.spv").unwrap();
+            let binary = unsafe {
+                std::slice::from_raw_parts(binary.as_ptr() as *const u32, binary.len() / 4)
+            };
+            create_vk_shader_module(device, binary).unwrap()
+        };
+        #[cfg(not(feature = "shaderc"))]
+        let fragment_shader_module = {
+            let binary = std::fs::read("../cuda-viewer/src/shaders/buf_display.frag.spv").unwrap();
+            let binary = unsafe {
+                std::slice::from_raw_parts(binary.as_ptr() as *const u32, binary.len() / 4)
+            };
+            create_vk_shader_module(device, binary).unwrap()
         };
 
         let vertex_shader_stage = vk::PipelineShaderStageCreateInfo::builder()

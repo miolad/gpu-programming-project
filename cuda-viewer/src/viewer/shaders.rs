@@ -1,15 +1,20 @@
+#[cfg(feature = "shaderc")]
 use std::{path::{Path, PathBuf}, fmt::Display};
-
-use ash::{vk, prelude::VkResult, Device};
+#[cfg(feature = "shaderc")]
 use colored::Colorize;
+#[cfg(feature = "shaderc")]
 use shaderc::{Compiler, CompilationArtifact};
 
+use ash::{vk, prelude::VkResult, Device};
+
+#[cfg(feature = "shaderc")]
 #[derive(Debug)]
 pub struct CompilationWarnings {
     pub count: usize,
     pub string: String
 }
 
+#[cfg(feature = "shaderc")]
 impl From<&CompilationArtifact> for CompilationWarnings {
     fn from(artifact: &CompilationArtifact) -> Self {
         Self {
@@ -19,6 +24,7 @@ impl From<&CompilationArtifact> for CompilationWarnings {
     }
 }
 
+#[cfg(feature = "shaderc")]
 impl Display for CompilationWarnings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = if self.count > 0 {
@@ -31,12 +37,15 @@ impl Display for CompilationWarnings {
     }
 }
 
+#[cfg(feature = "shaderc")]
 pub struct ShaderCompiler {
     compiler: Compiler
 }
 
+#[cfg(feature = "shaderc")]
 type CompiledBinary = (Box<[u32]>, CompilationWarnings);
 
+#[cfg(feature = "shaderc")]
 impl ShaderCompiler {
     pub fn new() -> Option<Self> {
         let compiler = Compiler::new()?;
