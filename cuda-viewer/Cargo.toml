@@ -22,3 +22,4 @@ cbindgen = "0.24"
 [features]
 default = []
 shaderc = ["dep:shaderc", "dep:colored"]
+zero-copy-mem = []

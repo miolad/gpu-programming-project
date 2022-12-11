@@ -19,9 +19,9 @@ const VALIDATION_LAYERS: [&CStr; 1] = unsafe {[
     CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0")
 ]};
 
-#[cfg(target_os = "windows")]
+#[cfg(all(not(feature = "zero-copy-mem"), target_os = "windows"))]
 const EXTERNAL_MEMORY_EXT_NAME: &CStr = ash::extensions::khr::ExternalMemoryWin32::name();
-#[cfg(target_os = "linux")]
+#[cfg(all(not(feature = "zero-copy-mem"), target_os = "linux"))]
 const EXTERNAL_MEMORY_EXT_NAME: &CStr = ash::extensions::khr::ExternalMemoryFd::name();
 
 // Measures how tightly CPU and GPU should be synchronized together
@@ -71,7 +71,7 @@ pub struct Viewer {
     render_done_fences: Box<[vk::Fence; FRAMES_IN_FLIGHT]>,
     image_acquired_semaphores: Box<[vk::Semaphore; FRAMES_IN_FLIGHT]>,
     render_done_semaphores: Box<[vk::Semaphore; FRAMES_IN_FLIGHT]>,
-    cuda_buffer: (vk::Buffer, vk::DeviceMemory, u64), // TODO: should this be cleared up at all on the Vulkan side?
+    cuda_buffer: (vk::Buffer, vk::DeviceMemory, u64),
 
     /// Used by the frames in flight logic to decide which set of objects to use on which frame
     frame_index: usize,
@@ -131,6 +131,18 @@ impl Viewer {
         let (render_done_fences, image_acquired_semaphores, render_done_semaphores) =
             Self::create_sync_objects(&device);
         let cuda_buffer = {
+            #[cfg(feature = "zero-copy-mem")]
+            let (buf, mem) = import_host_buffer(
+                &instance,
+                &device,
+                physical_device,
+                cuda_buffer_handle,
+                cuda_buffer_size,
+                vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+                vk::MemoryPropertyFlags::empty() // Allow any possible memory property
+            ).unwrap();
+
+            #[cfg(not(feature = "zero-copy-mem"))]
             let (buf, mem) = import_external_buffer(
                 &instance,
                 &device,
@@ -452,7 +464,7 @@ impl Viewer {
 
         #[cfg(not(feature = "shaderc"))]
         let vertex_shader_module = {
-            let binary = std::fs::read("../cuda-viewer/src/shaders/fs_quad.vert.spv").unwrap();
+            let binary = std::include_bytes!("../shaders/fs_quad.vert.spv");
             let binary = unsafe {
                 std::slice::from_raw_parts(binary.as_ptr() as *const u32, binary.len() / 4)
             };
@@ -460,7 +472,7 @@ impl Viewer {
         };
         #[cfg(not(feature = "shaderc"))]
         let fragment_shader_module = {
-            let binary = std::fs::read("../cuda-viewer/src/shaders/buf_display.frag.spv").unwrap();
+            let binary = std::include_bytes!("../shaders/buf_display.frag.spv");
             let binary = unsafe {
                 std::slice::from_raw_parts(binary.as_ptr() as *const u32, binary.len() / 4)
             };
@@ -714,10 +726,14 @@ impl Viewer {
                 }
 
                 // Check external memory extension support
+                #[cfg(feature = "zero-copy-mem")]
+                let external_memory_ext_name = vk::ExtExternalMemoryHostFn::name();
+                #[cfg(not(feature = "zero-copy-mem"))]
+                let external_memory_ext_name = EXTERNAL_MEMORY_EXT_NAME;
                 let external_memory_supported = instance.enumerate_device_extension_properties(physical_device)
                     .unwrap()
                     .into_iter()
-                    .any(|ext| CStr::from_ptr(ext.extension_name.as_ptr()) == EXTERNAL_MEMORY_EXT_NAME);
+                    .any(|ext| CStr::from_ptr(ext.extension_name.as_ptr()) == external_memory_ext_name);
 
                 if !external_memory_supported {
                     return None;
@@ -779,6 +795,9 @@ impl Viewer {
 
                         let enabled_extensions = [
                             Swapchain::name().as_ptr(),
+                            #[cfg(feature = "zero-copy-mem")]
+                            vk::ExtExternalMemoryHostFn::name().as_ptr(),
+                            #[cfg(not(feature = "zero-copy-mem"))]
                             EXTERNAL_MEMORY_EXT_NAME.as_ptr()
                         ];
 
@@ -959,6 +978,7 @@ unsafe fn find_memory_type(
 /// 
 /// Can return None if no available memory type is compatible
 /// In case this function returns None, it is possible the memory and/or buffer have been allocated anyway
+#[cfg(not(feature = "zero-copy-mem"))]
 unsafe fn import_external_buffer(
     instance: &Instance,
     device: &Device,
@@ -997,6 +1017,65 @@ unsafe fn import_external_buffer(
         .memory_type_index(find_memory_type(instance, physical_device, memory_requirements.memory_type_bits, memory_properties)?)
         .push_next(&mut allocate_flags_info)
         .push_next(&mut handle_info);
+
+    let allocation = device.allocate_memory(&allocate_info, None).ok()?;
+    device.bind_buffer_memory(buffer, allocation, 0).ok()?;
+    
+    Some((buffer, allocation))
+}
+
+/// Imports a buffer from an host allocated memory
+/// 
+/// Can return None if no available memory type is compatible
+/// In case this function returns None, it is possible the memory and/or buffer have been allocated anyway
+#[cfg(feature = "zero-copy-mem")]
+unsafe fn import_host_buffer(
+    instance: &Instance,
+    device: &Device,
+    physical_device: vk::PhysicalDevice,
+    host_buf: *mut c_void,
+    size: u64,
+    usage: vk::BufferUsageFlags,
+    memory_properties: vk::MemoryPropertyFlags
+) -> Option<(vk::Buffer, vk::DeviceMemory)> {
+    let mut external_memory_buffer_info = vk::ExternalMemoryBufferCreateInfo::builder()
+        .handle_types(vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT);
+    
+    let buffer_create_info = vk::BufferCreateInfo::builder()
+        .size(size)
+        .usage(usage)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+        .push_next(&mut external_memory_buffer_info);
+
+    let buffer = device.create_buffer(&buffer_create_info, None).ok()?;
+    let memory_requirements = device.get_buffer_memory_requirements(buffer);
+
+    let mut host_ptr_properties = vk::MemoryHostPointerPropertiesEXT::default();
+    let external_memory_host_fn = vk::ExtExternalMemoryHostFn::load(|name| {
+        std::mem::transmute(instance.get_device_proc_addr(device.handle(), name.as_ptr()))
+    });
+    (external_memory_host_fn.get_memory_host_pointer_properties_ext)(
+        device.handle(),
+        vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT,
+        host_buf as _,
+        &mut host_ptr_properties
+    ).result().unwrap();
+
+    if memory_requirements.memory_type_bits & host_ptr_properties.memory_type_bits == 0 {
+        panic!("External memory host: no suitable memory types");
+    }
+
+    let mut import_memory_host_pointer_info = vk::ImportMemoryHostPointerInfoEXT::builder()
+        .handle_type(vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT)
+        .host_pointer(host_buf);
+
+    let mut allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+        .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+    let allocate_info = vk::MemoryAllocateInfo::builder()
+        .allocation_size(memory_requirements.size)
+        .memory_type_index(find_memory_type(instance, physical_device, memory_requirements.memory_type_bits & host_ptr_properties.memory_type_bits, memory_properties)?)
+        .push_next(&mut allocate_flags_info)
+        .push_next(&mut import_memory_host_pointer_info);
 
     let allocation = device.allocate_memory(&allocate_info, None).ok()?;
     device.bind_buffer_memory(buffer, allocation, 0).ok()?;

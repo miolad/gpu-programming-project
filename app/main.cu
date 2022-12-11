@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <cuda.h>
+#include <assert.h>
 #include <cudaviewer.h>
 
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
+#if (defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)) && !defined(USE_ZERO_COPY_MEMORY)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -12,6 +13,7 @@
 #include <winternl.h>
 #endif
 
+#if !defined(USE_ZERO_COPY_MEMORY)
 static const char *_cudaGetErrorEnum(CUresult error) {
   static char unknown[] = "<unknown>";
   const char *ret = NULL;
@@ -32,18 +34,22 @@ void check(T result, char const *const func, const char *const file,
     exit(EXIT_FAILURE);
   }
 }
+#endif
 
 #define ROUND_UP_TO_GRANULARITY(x, n) (((x + n - 1) / n) * n)
 
 #define RES_X 800
 #define RES_Y 600
 
+#if !defined(USE_ZERO_COPY_MEMORY)
 #if defined(__linux__)
 CUmemAllocationHandleType shareable_mem_handle_type = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
 #else
 CUmemAllocationHandleType shareable_mem_handle_type = CU_MEM_HANDLE_TYPE_WIN32;
 #endif
+#endif
 
+#if !defined(USE_ZERO_COPY_MEMORY)
 void get_default_security_descriptor(CUmemAllocationProp* prop) {
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
     static const char sddl[] = "D:P(OA;;GARCSDWDWOCCDCLCSWLODTWPRPCRFA;;;WD)";
@@ -66,6 +72,7 @@ void get_default_security_descriptor(CUmemAllocationProp* prop) {
     prop->win32HandleMetaData = &objAttributes;
 #endif
 }
+#endif
 
 __global__ void fill_image(uint32_t* img, uint8_t b) {
     uint32_t x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -81,10 +88,16 @@ __global__ void fill_image(uint32_t* img, uint8_t b) {
 }
 
 int main() {
+    // Allocate shareable memory for the framebuffer
+#if defined(USE_ZERO_COPY_MEMORY)
+    void* d_ptr, * mem_shareable_handle;
+    size_t framebuffer_size = ROUND_UP_TO_GRANULARITY(RES_X * RES_Y * 4, 4096); // Align the size to a ridiculously large number just to be on the safe side
+    cudaHostAlloc(&mem_shareable_handle, framebuffer_size, cudaHostAllocMapped);
+    cudaHostGetDevicePointer(&d_ptr, mem_shareable_handle, 0);
+#else
     // Initialize driver API
     checkCudaErrors(cuInit(0));
     
-    // Allocate shareable memory for the framebuffer
     CUmemAllocationProp alloc_prop = {};
     alloc_prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
     alloc_prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
@@ -116,6 +129,7 @@ int main() {
     access_descriptor.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
 
     checkCudaErrors(cuMemSetAccess(d_ptr, framebuffer_size, &access_descriptor, 1));
+#endif
 
     // Initialize viewer
     cudaDeviceProp device_props;
@@ -144,8 +158,12 @@ int main() {
     viewer::deinit(viewer_ctx);
 
     // Free memory
+#if defined(USE_ZERO_COPY_MEMORY)
+    cudaFreeHost(mem_shareable_handle);
+#else
     checkCudaErrors(cuMemUnmap(d_ptr, framebuffer_size));
     checkCudaErrors(cuMemAddressFree(d_ptr, framebuffer_size));
+#endif
     
     return EXIT_SUCCESS;
 }
