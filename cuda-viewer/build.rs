@@ -6,5 +6,5 @@ fn main() {
         .with_namespace("viewer")
         .generate()
         .unwrap()
-        .write_to_file("cudaviewer.h");
+        .write_to_file("../app/cudaviewer.h");
 }
