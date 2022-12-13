@@ -10,7 +10,6 @@ layout(push_constant, std430) uniform PushConstants {
     uint framebuffer_size_x;
 } pc;
 
-layout(location = 0) in float in_u;
 layout(location = 0) out vec4 out_color;
 
 void main() {

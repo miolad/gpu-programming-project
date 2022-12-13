@@ -1,4 +1,4 @@
-app/.vscode
+.vscode
 app/cuda_viewer*
 app/app*
 cuda-viewer/target
