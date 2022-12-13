@@ -190,6 +190,7 @@ impl Viewer {
     }
 
     unsafe fn main_loop(&mut self, event_loop: &mut EventLoop<()>) -> bool {
+        static mut IS_MINIMIZED: bool = false;
         let mut should_close = false;
         
         event_loop.run_return(|event, _, control_flow| {
@@ -213,6 +214,10 @@ impl Viewer {
                             *control_flow = ControlFlow::Exit;
                         },
 
+                        WindowEvent::Resized(PhysicalSize { width, height }) => {
+                            IS_MINIMIZED = width == 0 && height == 0;
+                        },
+
                         _ => {}
                     }
                 }
@@ -221,7 +226,9 @@ impl Viewer {
 
                 Event::RedrawRequested(_) => {
                     // Draw one frame, then return
-                    self.draw_frame();
+                    if !IS_MINIMIZED {
+                        self.draw_frame();
+                    }
                     *control_flow = ControlFlow::Exit;
                 },
 
@@ -446,7 +453,7 @@ impl Viewer {
                 ShaderKind::Vertex,
                 "main"
             ).unwrap();
-            println!("fs_quad.vert: {}", warnings);
+            // println!("fs_quad.vert: {}", warnings);
 
             create_vk_shader_module(device, &binary).unwrap()
         };
@@ -457,7 +464,7 @@ impl Viewer {
                 ShaderKind::Fragment,
                 "main"
             ).unwrap();
-            println!("buf_display.frag: {}", warnings);
+            // println!("buf_display.frag: {}", warnings);
 
             create_vk_shader_module(device, &binary).unwrap()
         };
@@ -830,7 +837,7 @@ impl Viewer {
             })
             .expect("No physical device that meets the requirements is present");
 
-        println!("Selected device: {}", CStr::from_ptr(instance.get_physical_device_properties(ret.0).device_name.as_ptr()).to_string_lossy());
+        // println!("Selected device: {}", CStr::from_ptr(instance.get_physical_device_properties(ret.0).device_name.as_ptr()).to_string_lossy());
 
         ret
     }
