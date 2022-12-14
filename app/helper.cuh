@@ -1,6 +1,7 @@
 #ifndef _HELPER_CUH_
 #define _HELPER_CUH_
 
+#include <iostream>
 #include <cuda.h>
 
 #if !defined(USE_ZERO_COPY_MEMORY)
@@ -19,8 +20,8 @@ static const char *_cudaGetErrorEnum(cudaError_t error) {
 template <typename T>
 void check(T result, char const *const func, const char *const file, int const line) {
     if (result) {
-        fprintf(stderr, "CUDA error at %s:%d code=%d(%s) \"%s\" \n", file, line,
-            static_cast<unsigned int>(result), _cudaGetErrorEnum(result), func);
+        std::cerr << "CUDA error at " << file << ":" << line << " code=" << static_cast<unsigned int>(result) <<
+            "(" << _cudaGetErrorEnum(result) << ") \"" << func << "\"" << std::endl;
         exit(EXIT_FAILURE);
     }
 }

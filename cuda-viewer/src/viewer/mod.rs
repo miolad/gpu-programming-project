@@ -215,7 +215,7 @@ impl Viewer {
                         },
 
                         WindowEvent::Resized(PhysicalSize { width, height }) => {
-                            IS_MINIMIZED = width == 0 && height == 0;
+                            IS_MINIMIZED = width != self.swapchain_extent.width && height != self.swapchain_extent.height;
                         },
 
                         _ => {}

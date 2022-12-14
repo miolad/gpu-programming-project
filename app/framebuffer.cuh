@@ -1,8 +1,10 @@
 #ifndef _FRAMEBUFFER_CUH_
 #define _FRAMEBUFFER_CUH_
 
+#include <iostream>
 #include <cuda.h>
 #include "helper.cuh"
+#include "utils.cuh"
 
 #define ROUND_UP_TO_GRANULARITY(x, n) (((x + n - 1) / n) * n)
 
@@ -15,6 +17,9 @@
 #include <winternl.h>
 #endif
 
+/**
+ * Simple abstraction over the creation of shareable memory for the app's framebuffer
+ */
 class Framebuffer {
 private:
 #ifndef USE_ZERO_COPY_MEMORY
@@ -36,8 +41,7 @@ private:
             BOOL result = ConvertStringSecurityDescriptorToSecurityDescriptorA(
                 sddl, SDDL_REVISION_1, &secDesc, NULL);
             if (result == 0) {
-            printf("IPC failure: getDefaultSecurityDescriptor Failed! (%d)\n",
-                    GetLastError());
+                std::cerr << "IPC failure: getWinDefaultSecurityDescriptor failed! " << GetLastError() << std::endl;
             }
 
             InitializeObjectAttributes(&objAttributes, NULL, 0, NULL, secDesc);
@@ -50,15 +54,18 @@ private:
 #endif
     
 public:
+    /// @brief Size of this framebuffer in bytes
     size_t m_size;
-    uint32_t* m_devPtr;
+    /// @brief Device accessible pointer to the framebuffer
+    RGBColor<uint8_t>* m_devPtr;
+    /// @brief Opaque shareable handle to the framebuffer
     void* m_shareableHandle;
 
     Framebuffer(int2 resolution) {
         // Allocate the framebuffer memory in a Vulkan shared memory pool
 #ifdef USE_ZERO_COPY_MEMORY
         // Align to a ridiculously large number to stay on the safe side
-        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * 4, 4096);
+        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * sizeof(RGBColor<uint8_t>), 4096);
 
         checkCudaErrors(cudaHostAlloc(&m_shareableHandle, m_size, cudaHostAllocMapped));
         checkCudaErrors(cudaHostGetDevicePointer((void**)&m_devPtr, m_shareableHandle, 0));
@@ -78,7 +85,7 @@ public:
 
         size_t granularity;
         checkCudaErrors(cuMemGetAllocationGranularity(&granularity, &allocProp, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
-        m_size = ROUND_UP_TO_GRANULARITY(resolution.x + resolution.y * 4, granularity);
+        m_size = ROUND_UP_TO_GRANULARITY(resolution.x + resolution.y * sizeof(RGBColor<uint8_t>), granularity);
 
         CUmemGenericAllocationHandle allocationHandle;
         checkCudaErrors(cuMemAddressReserve((CUdeviceptr*)&m_devPtr, m_size, granularity, 0, 0));

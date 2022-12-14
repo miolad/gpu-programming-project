@@ -1,14 +1,16 @@
-#include <stdio.h>
 #include <inttypes.h>
 
 #include "helper.cuh"
 #include "framebuffer.cuh"
+#include "scene.cuh"
+#include "utils.cuh"
 #include "cudaviewer.h"
 
 #define RES_X 800
 #define RES_Y 600
+#define SCENE "scenes/cornell_box.obj"
 
-__global__ void fill_image(uint32_t* img, uint8_t b) {
+__global__ void fill_image(RGBColor<uint8_t>* img, uint8_t b) {
     uint32_t x = threadIdx.x + blockIdx.x * blockDim.x;
     uint32_t y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -18,12 +20,22 @@ __global__ void fill_image(uint32_t* img, uint8_t b) {
     uint8_t g = (uint8_t)(((float)y * 255.0) / (float)RES_Y);
 
     uint64_t index = x + y * RES_X;
-    img[index] = (uint32_t)r + ((uint32_t)g << 8) + ((uint32_t)b << 16);
+    img[index] = {
+        r, g, b
+    };
 }
 
 int main() {
     // Create a Vulkan shared framebuffer
     Framebuffer fb(make_int2(RES_X, RES_Y));
+
+    // Load scene from obj
+    Scene scene;
+    if (!scene.load(SCENE)) {
+        exit(EXIT_FAILURE);
+    }
+
+    std::cout << "Loaded scene (" << SCENE << "): " << scene.m_numTriangles << " triangles" << std::endl;
 
     // Initialize viewer
     cudaDeviceProp deviceProps;
