@@ -4,6 +4,7 @@
 #include "framebuffer.cuh"
 #include "scene.cuh"
 #include "utils.cuh"
+#include "camera.cuh"
 #include "cudaviewer.h"
 
 #define RES_X 800
@@ -19,21 +20,28 @@ __global__ void fill_image(RGBColor<uint8_t>* img, uint8_t b) {
     uint8_t r = (uint8_t)(((float)x * 255.0) / (float)RES_X);
     uint8_t g = (uint8_t)(((float)y * 255.0) / (float)RES_Y);
 
-    uint64_t index = x + y * RES_X;
-    img[index] = {
+    uint32_t index = x + y * RES_X;
+    RGBColor<uint8_t> result = {
         r, g, b
     };
+    // This wild way to write to the framebuffer greatly increases performance
+    // with USE_ZERO_COPY_MEMORY on discrete GPU systems (instead of just img[index] = result),
+    // apparently because it writes one u32 instead of 3 u8s to global memory (in RAM)
+    ((uint32_t*)img)[index] = reinterpret_cast<uint32_t const&>(result);
 }
 
 int main() {
     // Create a Vulkan shared framebuffer
     Framebuffer fb(make_int2(RES_X, RES_Y));
-
+    
     // Load scene from obj
     Scene scene;
     if (!scene.load(SCENE)) {
         exit(EXIT_FAILURE);
     }
+
+    // Instantiate a virtual camera
+    Camera camera(make_int2(RES_X, RES_Y));
 
     std::cout << "Loaded scene (" << SCENE << "): " << scene.m_numTriangles << " triangles" << std::endl;
 

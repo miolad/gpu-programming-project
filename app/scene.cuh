@@ -12,8 +12,6 @@
  * Represents the entire scene, with its geometry (as a list of triangles) and materials
  */
 class Scene {
-private:
-
 public:
     /// @brief Device pointer to the buffer of all triangles in the scene
     Triangle* m_devTriangles;
@@ -62,9 +60,9 @@ public:
 
                 for (size_t i = 0; i < 3; ++i) {
                     auto index = shape.mesh.indices[triangleIndex * 3 + i].vertex_index;
-                    auto vert = ((Vertex*)&tri) + i;
+                    auto vert = ((float3*)&tri) + i;
 
-                    *vert = ((Vertex*)attrib.vertices.data())[index];
+                    *vert = ((float3*)attrib.vertices.data())[index];
                 }
 
                 tri.materialIndex = shape.mesh.material_ids[triangleIndex];

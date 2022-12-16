@@ -85,7 +85,7 @@ public:
 
         size_t granularity;
         checkCudaErrors(cuMemGetAllocationGranularity(&granularity, &allocProp, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
-        m_size = ROUND_UP_TO_GRANULARITY(resolution.x + resolution.y * sizeof(RGBColor<uint8_t>), granularity);
+        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * sizeof(RGBColor<uint8_t>), granularity);
 
         CUmemGenericAllocationHandle allocationHandle;
         checkCudaErrors(cuMemAddressReserve((CUdeviceptr*)&m_devPtr, m_size, granularity, 0, 0));
@@ -102,6 +102,9 @@ public:
         
         checkCudaErrors(cuMemSetAccess((CUdeviceptr)m_devPtr, m_size, &accessDescriptor, 1));
 #endif
+
+        // Clear the framebuffer
+        checkCudaErrors(cudaMemset((void*)m_devPtr, 0, m_size));
     }
 
     ~Framebuffer() {
