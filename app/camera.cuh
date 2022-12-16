@@ -12,12 +12,14 @@ private:
     const float m_fov = 75.0 * PI / 180.0;
     /// @brief Camera's position in the 3D world
     const float3 m_position = make_float3(0.0, 0.0, 0.0);
-    /// @brief Camera's normalized up direction
-    const float3 m_up = make_float3(0.0, 1.0, 0.0);
+    /// @brief World normalized up direction
+    const float3 m_upWorld = make_float3(0.0, 1.0, 0.0);
     /// @brief Camera's normalized view direction
     const float3 m_viewDir = make_float3(0.0, 0.0, -1.0);
     /// @brief Camera's normalized right direction
-    const float3 m_right = normalize(cross(m_viewDir, m_up));
+    const float3 m_right = normalize(cross(m_viewDir, m_upWorld));
+    /// @brief Camera's normalized up direction
+    const float3 m_up = normalize(cross(m_right, m_viewDir));
     
     /// @brief Framebuffer's half resolution
     float2 m_halfResolution;
