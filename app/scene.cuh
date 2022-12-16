@@ -4,6 +4,7 @@
 #include <iostream>
 #include "utils.cuh"
 #include "helper.cuh"
+#include "camera.cuh"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -19,16 +20,19 @@ public:
     Material* m_devMaterials;
     /// @brief Total number of triangles in the scene
     uint32_t  m_numTriangles;
+    /// @brief Camera associated to the scene. Loading an obj also initializes the camera
+    Camera* m_camera;
 
-    Scene() : m_devTriangles(NULL), m_devMaterials(NULL) { }
+    Scene() : m_devTriangles(NULL), m_devMaterials(NULL), m_camera(NULL) { }
 
     /**
      * Load a scene from the specified .obj file
      * 
      * @param objFile the filename of the obj file to load
+     * @param resolution the full framebuffer resolution, used to initialize the camera
      * @returns true on success, false on failure
      */
-    bool load(const char* objFile) {
+    bool load(const char* objFile, int2 resolution) {
         tinyobj::ObjReaderConfig readerConfig;
         readerConfig.triangulate = true;   // Triangulate input meshes
         readerConfig.vertex_color = false; // Don't care about vertex colors, we're going to use materials
@@ -55,6 +59,16 @@ public:
 
         // Triangles
         for (const auto shape : reader.GetShapes()) {
+            if (shape.name == "cameraParameters" && shape.points.indices.size() == 4) {
+                // Load camera parameters
+                float3 position = ((float3*)attrib.vertices.data())[shape.points.indices[0].vertex_index];
+                float3 up       = ((float3*)attrib.vertices.data())[shape.points.indices[1].vertex_index];
+                float3 view     = ((float3*)attrib.vertices.data())[shape.points.indices[2].vertex_index];
+                float  hfov     = attrib.vertices[shape.points.indices[3].vertex_index * 3];
+
+                m_camera = new Camera(resolution, position, up, view, hfov);
+            }
+            
             for (size_t triangleIndex = 0; triangleIndex < shape.mesh.num_face_vertices.size(); ++triangleIndex) {
                 Triangle tri;
 
@@ -68,6 +82,11 @@ public:
                 tri.materialIndex = shape.mesh.material_ids[triangleIndex];
                 triangles.push_back(tri);
             }
+        }
+
+        if (m_camera == NULL) {
+            std::cerr << "Camera parameters not found or invalid in scene obj, configuring generic camera" << std::endl;
+            m_camera = new Camera(resolution, make_float3(0.0, 0.0, 0.0), make_float3(0.0, 1.0, 0.0), make_float3(0.0, 0.0, -1.0), 65.0);
         }
 
         // Materials
@@ -105,7 +124,14 @@ public:
         // Deallocate device buffers
         if (m_devTriangles != NULL && m_devMaterials != NULL) {
             checkCudaErrors(cudaFree((void*)m_devTriangles));
+        }
+        if (m_devMaterials != NULL) {
             checkCudaErrors(cudaFree((void*)m_devMaterials));
+        }
+
+        // Deallocate camera
+        if (m_camera != NULL) {
+            delete m_camera;
         }
     }
 };

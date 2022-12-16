@@ -36,12 +36,9 @@ int main() {
     
     // Load scene from obj
     Scene scene;
-    if (!scene.load(SCENE)) {
+    if (!scene.load(SCENE, make_int2(RES_X, RES_Y))) {
         exit(EXIT_FAILURE);
     }
-
-    // Instantiate a virtual camera
-    Camera camera(make_int2(RES_X, RES_Y));
 
     std::cout << "Loaded scene (" << SCENE << "): " << scene.m_numTriangles << " triangles" << std::endl;
 
