@@ -3,7 +3,13 @@
 
 #include <inttypes.h>
 
-#define PI 3.14159265359
+#define PI  3.14159265359
+
+/// @brief Approximation of zero, needed to deal with possible rounding errors in floating point arithmetic
+#define EPS 0.000001
+
+/// @brief Maximum ray time. This clamps the maximum size of a scene in world units
+#define RAY_MAX_T 99999999.0
 
 /**
  * RGB Color with generic component types and 4 byte alignment
@@ -31,11 +37,16 @@ struct Material {
 };
 
 /**
- * A ray with a starting position and a direction
+ * A ray with an origin and a direction
  */
 struct Ray {
-    float3 startingPosition, direction;
+    float3 origin, direction;
 };
+
+inline __host__ __device__ float clamp(float d, float min, float max) {
+    const float t = d < min ? min : d;
+    return t > max ? max : t;
+}
 
 inline __host__ __device__ float2 operator+(float2 a, float2 b) {
     return {
@@ -56,6 +67,14 @@ inline __host__ __device__ float3 operator+(float3 a, float3 b) {
         a.x + b.x,
         a.y + b.y,
         a.z + b.z
+    };
+}
+
+inline __host__ __device__ float3 operator-(float3 a, float3 b) {
+    return {
+        a.x - b.x,
+        a.y - b.y,
+        a.z - b.z
     };
 }
 

@@ -11,23 +11,112 @@
 #define RES_Y 600
 #define SCENE "scenes/cornell_box.obj"
 
-__global__ void fill_image(RGBColor<uint8_t>* img, uint8_t b) {
+/**
+ * Computes the intersection between the provided ray and triangle.
+ * This function implements the Moller-Trumbore algorithm (https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm)
+ * 
+ * @param r the ray
+ * @param tri triangle to intersect
+ * @returns the "time" of the ray's intersection with the triangle, i.e. the distance along the ray's direction
+ *          to the point of the intersection, in world units.
+ *          If no intersection is found, -1.0 is returned.
+ */
+inline __device__ float rayTriangleIntersection(Ray& r, Triangle& tri) {
+    auto edge1 = tri.v2 - tri.v1;
+    auto edge2 = tri.v3 - tri.v1;
+    auto h = cross(r.direction, edge2);
+    auto a = dot(edge1, h);
+
+    if (a > -EPS && a < EPS)
+        return -1.0;
+
+    auto f = 1.0 / a;
+    auto s = r.origin - tri.v1;
+    auto u = f * dot(s, h);
+
+    if (u < 0.0 || u > 1.0)
+        return -1.0;
+
+    auto q = cross(s, edge1);
+    auto v = f * dot(r.direction, q);
+
+    if (v < 0.0 || u + v > 1.0)
+        return -1.0;
+
+    auto t = f * dot(edge2, q);
+    return t > EPS ? t : -1.0;
+}
+
+/**
+ * Find the closest intersection between a ray and a list of triangles by iteratively testing the
+ * intersection between the ray and each triangle
+ * 
+ * @param r the ray
+ * @param tris list of all the triangles
+ * @param triNum number of triangles pointed to by `tris`
+ * @param intersectionTri (out) pointer to the closest triangle intersected, or NULL if no intersection was found
+ * @param t (out) "time" of the ray to the closest intersection. This is invalid if intersectionTri is NULL
+ */
+__device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t) {
+    *t = RAY_MAX_T;
+    *intersectionTri = NULL;
+    
+    for (uint32_t i = 0; i < triNum; ++i) {
+        float ti = rayTriangleIntersection(r, tris[i]);
+
+        if (ti > 0.0 && ti < *t) {
+            *t = ti;
+            *intersectionTri = tris + i;
+        }
+    }
+}
+
+/**
+ * Render the scene through the provided virtual camera into the framebuffer
+ * 
+ * @param tris list of all the triangles in the scene
+ * @param mats list of all the materials in the scene
+ * @param triNum number of triangles pointed to by `tris`
+ * @param cam virtual camera
+ * @param fb framebuffer of RES_X by RES_Y pixels to render to
+ */
+__global__ void rayTrace(Triangle* tris, Material* mats, uint32_t triNum, Camera cam, RGBColor<uint8_t>* fb) {
     uint32_t x = threadIdx.x + blockIdx.x * blockDim.x;
     uint32_t y = threadIdx.y + blockIdx.y * blockDim.y;
 
+    // Terminate pixels outside the framebuffer
     if (x >= RES_X || y >= RES_Y) return;
 
-    uint8_t r = (uint8_t)(((float)x * 255.0) / (float)RES_X);
-    uint8_t g = (uint8_t)(((float)y * 255.0) / (float)RES_Y);
+    // Get this pixel's ray (flipping the y axis)
+    auto r = cam.getRayThroughPixel(make_int2(x, RES_Y - y - 1));
 
-    uint32_t index = x + y * RES_X;
-    RGBColor<uint8_t> result = {
-        r, g, b
-    };
+    // Trace the ray through the geometry
+    Triangle* intersectionTri;
+    float t;
+    findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
+
+    // Get the triangle's material and output on the framebuffer
+    RGBColor<uint8_t> outColor;
+    if (intersectionTri != NULL) {
+        auto matAlbedo     = mats[intersectionTri->materialIndex].albedo;
+        auto matEmissivity = mats[intersectionTri->materialIndex].emissivity;
+        outColor = {
+            (uint8_t)(clamp((matAlbedo.r + matEmissivity.r) * 255.0, 0.0, 255.0)),
+            (uint8_t)(clamp((matAlbedo.g + matEmissivity.g) * 255.0, 0.0, 255.0)),
+            (uint8_t)(clamp((matAlbedo.b + matEmissivity.b) * 255.0, 0.0, 255.0))
+        };
+    } else {
+        outColor = {
+            0, 0, 0
+        };
+    }
+
+    uint32_t pixelIndex = x + y * RES_X;
+
     // This wild way to write to the framebuffer greatly increases performance
     // with USE_ZERO_COPY_MEMORY on discrete GPU systems (instead of just img[index] = result),
     // apparently because it writes one u32 instead of 3 u8s to global memory (in RAM)
-    ((uint32_t*)img)[index] = reinterpret_cast<uint32_t const&>(result);
+    ((uint32_t*)fb)[pixelIndex] = reinterpret_cast<uint32_t const&>(outColor);
 }
 
 int main() {
@@ -51,10 +140,15 @@ int main() {
     cudaEvent_t event;
     checkCudaErrors(cudaEventCreate(&event));
     
-    uint8_t b = 0;
     while (true) {
         checkCudaErrors(cudaEventRecord(event));
-        fill_image<<<dim3(ceil(float(RES_X)/32.0), ceil(float(RES_Y)/32.0)), dim3(32, 32)>>>(fb.m_devPtr, b++);
+        rayTrace<<<dim3(ceil(float(RES_X)/32.0), ceil(float(RES_Y)/32.0)), dim3(32, 32)>>>(
+            scene.m_devTriangles,
+            scene.m_devMaterials,
+            scene.m_numTriangles,
+            *scene.m_camera,
+            fb.m_devPtr
+        );
 
         // Run the viewer's event loop while we wait to resubmit the CUDA kernel
         bool shouldClose = false;

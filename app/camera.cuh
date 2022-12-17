@@ -46,7 +46,7 @@ public:
      * @param pixel the pixel through to generate the ray for
      * @returns a ray from the camera position to the middle of the specified pixel
      */
-    __device__ inline Ray getRayThroughPixel(int2 pixel) {
+    inline __device__ Ray getRayThroughPixel(int2 pixel) {
         // Pixel's offset relative to the center of the screen
         float2 pixelOffset = make_float2((float)pixel.x, (float)pixel.y) + make_float2(0.5, 0.5) - m_halfResolution;
         float3 rayDir = normalize(m_viewDir                             +
