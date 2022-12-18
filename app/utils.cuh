@@ -3,13 +3,21 @@
 
 #include <inttypes.h>
 
-#define PI  3.14159265359
-
+#define PI                          3.14159265359
+/// @brief Horizontal resolution of the framebuffer
+#define RES_X                       800
+/// @brief Vertical resolution of the framebuffer
+#define RES_Y                       600
+/// @brief Scene to load
+#define SCENE                       "scenes/cornell_box.obj"
 /// @brief Approximation of zero, needed to deal with possible rounding errors in floating point arithmetic
-#define EPS 0.000001
-
+#define EPS                         0.000001
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
-#define RAY_MAX_T 99999999.0
+#define RAY_MAX_T                   99999999.0
+/// @brief Number of samples to compute for each invocation of the main kernel
+#define SAMPLES_PER_BATCH           16
+/// @brief Maximum number of indirect light bounces
+#define MAX_BOUNCES                 8
 
 /**
  * Triangle representation in device memory
@@ -93,6 +101,14 @@ inline __host__ __device__ float3 operator*(float3 a, float b) {
 
 inline __host__ __device__ float3 operator*(float a, float3 b) {
     return b * a;
+}
+
+inline __host__ __device__ float3 operator*(float3 a, float3 b) {
+    return {
+        a.x * b.x,
+        a.y * b.y,
+        a.z * b.z
+    };
 }
 
 inline __host__ __device__ float dot(float3 a, float3 b) {
