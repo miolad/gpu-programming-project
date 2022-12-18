@@ -15,7 +15,7 @@
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
 #define RAY_MAX_T                   99999999.0
 /// @brief Number of samples to compute for each invocation of the main kernel
-#define SAMPLES_PER_BATCH           16
+#define SAMPLES_PER_BATCH           32
 /// @brief Maximum number of indirect light bounces
 #define MAX_BOUNCES                 8
 

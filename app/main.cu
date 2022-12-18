@@ -33,7 +33,7 @@ int main() {
     
     while (true) {
         checkCudaErrors(cudaEventRecord(event));
-        pathTrace<<<dim3(ceilf(float(RES_X)/16.0), ceilf(float(RES_Y)/16.0)), dim3(16, 16)>>>(
+        pathTrace<<<dim3(ceilf(float(RES_X)/32.0), ceilf(float(RES_Y)/16.0)), dim3(32, 16)>>>(
             scene.m_devTriangles,
             scene.m_devMaterials,
             scene.m_numTriangles,

@@ -140,7 +140,7 @@ __global__ void pathTrace(
             float t;
             findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
 
-            // // if no intersection, break the loop, this sample is done
+            // if no intersection, break the loop, this sample is done
             if (intersectionTri == NULL) break;
 
             // Get the intersection material
@@ -149,12 +149,17 @@ __global__ void pathTrace(
             // Add emission to output color
             color = color + throughput * mat->emissivity;
 
-            // Add surface contribution to path throughput.
+            // Add surface contribution to path throughput
             // Note that a lot of stuff cancels out here, due to the simple diffuse surface constraint.
             // In particular, the PI at the denominator of the Lambertian BRDF cancels out with the numerator
             // of the cosine weighted PDF, whose denominator in turn cancels out with the rendering equation's
             // cosine term.
             throughput = throughput * mat->albedo;
+
+            // Russian roulette
+            auto p = max(throughput.x, max(throughput.y, throughput.z));
+            if (p < curand_uniform(&randState)) break;
+            throughput = throughput * (1.0/p);
 
             // Prepare ray for the next bounce
             auto n = (dot(r.direction, intersectionTri->normal) < 0.0 ? 1.0 : -1.0) * intersectionTri->normal;
@@ -164,8 +169,10 @@ __global__ void pathTrace(
     }
 
     // Write normalized color to framebuffer
-    fb[pixelIndex] = fb[pixelIndex] * (float(batch)/float(batch + 1)) +  // Previous batches
-                     color * (1/float(SAMPLES_PER_BATCH * (batch + 1))); // Current batch
+    fb[pixelIndex] = (
+        fb[pixelIndex] * float(batch) +
+        color * (1.0 / float(SAMPLES_PER_BATCH))
+    ) * (1.0 / float(batch + 1));
 }
 
 #endif
