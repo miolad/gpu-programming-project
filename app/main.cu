@@ -80,7 +80,7 @@ __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum,
  * @param cam virtual camera
  * @param fb framebuffer of RES_X by RES_Y pixels to render to
  */
-__global__ void rayTrace(Triangle* tris, Material* mats, uint32_t triNum, Camera cam, RGBColor<uint8_t>* fb) {
+__global__ void rayTrace(Triangle* tris, Material* mats, uint32_t triNum, Camera cam, float3* fb) {
     uint32_t x = threadIdx.x + blockIdx.x * blockDim.x;
     uint32_t y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -96,27 +96,19 @@ __global__ void rayTrace(Triangle* tris, Material* mats, uint32_t triNum, Camera
     findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
 
     // Get the triangle's material and output on the framebuffer
-    RGBColor<uint8_t> outColor;
+    float3 outColor;
     if (intersectionTri != NULL) {
         auto matAlbedo     = mats[intersectionTri->materialIndex].albedo;
         auto matEmissivity = mats[intersectionTri->materialIndex].emissivity;
-        outColor = {
-            (uint8_t)(clamp((matAlbedo.r + matEmissivity.r) * 255.0, 0.0, 255.0)),
-            (uint8_t)(clamp((matAlbedo.g + matEmissivity.g) * 255.0, 0.0, 255.0)),
-            (uint8_t)(clamp((matAlbedo.b + matEmissivity.b) * 255.0, 0.0, 255.0))
-        };
+        outColor = matAlbedo + matEmissivity;
     } else {
         outColor = {
-            0, 0, 0
+            0.0, 0.0, 0.0
         };
     }
 
     uint32_t pixelIndex = x + y * RES_X;
-
-    // This wild way to write to the framebuffer greatly increases performance
-    // with USE_ZERO_COPY_MEMORY on discrete GPU systems (instead of just img[index] = result),
-    // apparently because it writes one u32 instead of 3 u8s to global memory (in RAM)
-    ((uint32_t*)fb)[pixelIndex] = reinterpret_cast<uint32_t const&>(outColor);
+    fb[pixelIndex] = outColor;
 }
 
 int main() {

@@ -57,7 +57,7 @@ public:
     /// @brief Size of this framebuffer in bytes
     size_t m_size;
     /// @brief Device accessible pointer to the framebuffer
-    RGBColor<uint8_t>* m_devPtr;
+    float3* m_devPtr;
     /// @brief Opaque shareable handle to the framebuffer
     void* m_shareableHandle;
 
@@ -65,7 +65,7 @@ public:
         // Allocate the framebuffer memory in a Vulkan shared memory pool
 #ifdef USE_ZERO_COPY_MEMORY
         // Align to a ridiculously large number to stay on the safe side
-        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * sizeof(RGBColor<uint8_t>), 4096);
+        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * sizeof(float3), 4096);
 
         checkCudaErrors(cudaHostAlloc(&m_shareableHandle, m_size, cudaHostAllocMapped));
         checkCudaErrors(cudaHostGetDevicePointer((void**)&m_devPtr, m_shareableHandle, 0));
@@ -85,7 +85,7 @@ public:
 
         size_t granularity;
         checkCudaErrors(cuMemGetAllocationGranularity(&granularity, &allocProp, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
-        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * sizeof(RGBColor<uint8_t>), granularity);
+        m_size = ROUND_UP_TO_GRANULARITY(resolution.x * resolution.y * sizeof(float3), granularity);
 
         CUmemGenericAllocationHandle allocationHandle;
         checkCudaErrors(cuMemAddressReserve((CUdeviceptr*)&m_devPtr, m_size, granularity, 0, 0));

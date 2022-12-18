@@ -93,13 +93,13 @@ public:
         for (const auto material : reader.GetMaterials()) {
             Material mat = {
                 // Albedo
-                RGBColor<float> {
+                {
                     material.diffuse[0],
                     material.diffuse[1],
                     material.diffuse[2]
                 },
                 // Emissivity
-                RGBColor<float> {
+                {
                     material.emission[0],
                     material.emission[1],
                     material.emission[2]

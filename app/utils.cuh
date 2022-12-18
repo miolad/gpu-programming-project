@@ -12,14 +12,6 @@
 #define RAY_MAX_T 99999999.0
 
 /**
- * RGB Color with generic component types and 4 byte alignment
- */
-template<typename T>
-struct __align__(4) RGBColor {
-    T r, g, b;
-};
-
-/**
  * 3 vertices plus material index
  */
 struct Triangle {
@@ -33,7 +25,7 @@ struct Triangle {
  * Material data
  */
 struct Material {
-    RGBColor<float> albedo, emissivity;
+    float3 albedo, emissivity;
 };
 
 /**
