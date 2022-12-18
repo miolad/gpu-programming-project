@@ -12,11 +12,13 @@
 #define RAY_MAX_T 99999999.0
 
 /**
- * 3 vertices plus material index
+ * Triangle representation in device memory
  */
 struct Triangle {
     /// @brief The vertices making up the triangle, in no particular order
     float3 v1, v2, v3;
+    /// @brief Normalized triangle normal vector. Note that this is not guaranteed to point to the "outside" of the mesh
+    float3 normal;
     /// @brief An index into the associated scene's materials array
     uint32_t materialIndex;
 };

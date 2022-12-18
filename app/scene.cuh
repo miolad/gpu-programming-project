@@ -2,12 +2,30 @@
 #define _SCENE_CUH_
 
 #include <iostream>
+#include <inttypes.h>
 #include "utils.cuh"
 #include "helper.cuh"
 #include "camera.cuh"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
+
+/**
+ * Computes normals for all the passed triangles
+ * 
+ * @param tris Device buffer containing all the triangles in the scene
+ * @param triNum number of triangles pointed to by `tris`
+ */
+__global__ static void computeTriangleNormals(Triangle* tris, uint32_t triNum) {
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if (tid >= triNum) return;
+
+    auto tri = tris[tid];
+    tris[tid].normal = normalize(cross(
+        tri.v2 - tri.v1,
+        tri.v3 - tri.v1
+    ));
+}
 
 /**
  * Represents the entire scene, with its geometry (as a list of triangles) and materials
@@ -116,6 +134,9 @@ public:
 
         checkCudaErrors(cudaMemcpy((void*)m_devTriangles, (void*)triangles.data(), m_numTriangles * sizeof(Triangle), cudaMemcpyHostToDevice));
         checkCudaErrors(cudaMemcpy((void*)m_devMaterials, (void*)materials.data(), materials.size() * sizeof(Material), cudaMemcpyHostToDevice));
+
+        // Compute triangle normals
+        computeTriangleNormals<<<ceil((float)m_numTriangles / 256.0), 256>>>(m_devTriangles, m_numTriangles);
 
         return true;
     }

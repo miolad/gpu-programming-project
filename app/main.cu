@@ -1,3 +1,4 @@
+#include <iostream>
 #include <inttypes.h>
 
 #include "helper.cuh"
