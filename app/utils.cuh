@@ -18,6 +18,8 @@
 #define SAMPLES_PER_BATCH           32
 /// @brief Maximum number of indirect light bounces
 #define MAX_BOUNCES                 8
+/// @brief Minimum bounces performed before employing russian roulette
+#define MIN_BOUNCES                 4
 
 /**
  * Triangle representation in device memory

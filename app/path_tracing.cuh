@@ -79,7 +79,7 @@ inline __device__ float rayTriangleIntersection(Ray& r, Triangle& tri) {
  * @param intersectionTri (out) pointer to the closest triangle intersected, or NULL if no intersection was found
  * @param t (out) "time" of the ray to the closest intersection. This is invalid if intersectionTri is NULL
  */
-__device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t) {
+inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t) {
     *t = RAY_MAX_T;
     *intersectionTri = NULL;
     
@@ -103,7 +103,7 @@ __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum,
  * @param batch batch number of this invocation
  * @param fb framebuffer of RES_X by RES_Y pixels to render to
  */
-__global__ void pathTrace(
+__global__ void __launch_bounds__(32*16) pathTrace(
     Triangle* tris,
     Material* mats,
     uint32_t triNum,
@@ -125,19 +125,37 @@ __global__ void pathTrace(
     // Get this pixel's camera ray (flipping the y axis)
     auto cameraRay = cam.getRayThroughPixel(make_int2(x, RES_Y - y - 1));
 
+    // Cache first bounce for all samples in this batch
+    Triangle* cameraBounceIntersectionTri;
+    float ti;
+    findClosestIntersection(cameraRay, tris, triNum, &cameraBounceIntersectionTri, &ti);
+
+    if (cameraBounceIntersectionTri == NULL) {
+        fb[pixelIndex] = make_float3(0.0, 0.0, 0.0);
+        return;
+    }
+
+    float3 initialThroughput = mats[cameraBounceIntersectionTri->materialIndex].albedo;
+
     // Will accumulate the contribution of SAMPLES_PER_BATCH samples
-    float3 color = make_float3(0.0, 0.0, 0.0);
+    float3 color = mats[cameraBounceIntersectionTri->materialIndex].emissivity * (float)SAMPLES_PER_BATCH;
 
     #pragma unroll
     for (uint32_t sample = 0; sample < SAMPLES_PER_BATCH; ++sample) {
         auto r = cameraRay;
-        auto throughput = make_float3(1.0, 1.0, 1.0);
+        auto throughput = initialThroughput;
+        auto intersectionTri = cameraBounceIntersectionTri;
+        auto t = ti;
 
+        // Note that `bounce` starts at 1 because the first camera ray is cached for all samples in the batch
         #pragma unroll
-        for (uint32_t bounce = 0; bounce < MAX_BOUNCES; ++bounce) {
+        for (uint32_t bounce = 1; bounce < MAX_BOUNCES; ++bounce) {
+            // Get new ray
+            auto n      = (dot(r.direction, intersectionTri->normal) < 0.0 ? 1.0 : -1.0) * intersectionTri->normal;
+            r.origin    = r.origin + r.direction * t + n * EPS; // Shift ray origin by a small amount to avoid self intersections due to floating point precision
+            r.direction = sampleHemisphereCosineWeighted(&randState, n);
+            
             // Intersect ray with geometry
-            Triangle* intersectionTri;
-            float t;
             findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
 
             // if no intersection, break the loop, this sample is done
@@ -157,14 +175,11 @@ __global__ void pathTrace(
             throughput = throughput * mat->albedo;
 
             // Russian roulette
-            auto p = max(throughput.x, max(throughput.y, throughput.z));
-            if (p < curand_uniform(&randState)) break;
-            throughput = throughput * (1.0/p);
-
-            // Prepare ray for the next bounce
-            auto n = (dot(r.direction, intersectionTri->normal) < 0.0 ? 1.0 : -1.0) * intersectionTri->normal;
-            r.origin    = r.origin + r.direction * t + n * EPS; // Shift ray origin by a small amount to avoid self intersections due to floating point precision
-            r.direction = sampleHemisphereCosineWeighted(&randState, n);
+            if (bounce >= MIN_BOUNCES) {
+                auto p = max(throughput.x, max(throughput.y, throughput.z));
+                if (p < curand_uniform(&randState)) break;
+                throughput = throughput * (1.0/p);
+            }
         }
     }
 

@@ -14,12 +14,15 @@ int main() {
     Framebuffer fb(make_int2(RES_X, RES_Y));
     
     // Load scene from obj
+    std::cout << "Loading scene (" << SCENE << ")...";
+    std::cout.flush();
+    
     Scene scene;
     if (!scene.load(SCENE, make_int2(RES_X, RES_Y))) {
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Loaded scene (" << SCENE << "): " << scene.m_numTriangles << " triangles" << std::endl;
+    std::cout << "DONE (" << scene.m_numTriangles << " triangles)" << std::endl;
 
     // Initialize viewer
     cudaDeviceProp deviceProps;
@@ -30,10 +33,17 @@ int main() {
     cudaEvent_t event;
     checkCudaErrors(cudaEventCreate(&event));
     uint32_t batch = 0;
+    auto gridSize = dim3(
+        ceilf((float)RES_X / 32.0),
+        ceilf((float)RES_Y / 16.0)
+    );
+    auto blockSize = dim3(
+        32, 16
+    );
     
     while (true) {
         checkCudaErrors(cudaEventRecord(event));
-        pathTrace<<<dim3(ceilf(float(RES_X)/32.0), ceilf(float(RES_Y)/16.0)), dim3(32, 16)>>>(
+        pathTrace<<<gridSize, blockSize>>>(
             scene.m_devTriangles,
             scene.m_devMaterials,
             scene.m_numTriangles,
