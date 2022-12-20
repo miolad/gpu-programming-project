@@ -34,11 +34,11 @@ int main() {
     checkCudaErrors(cudaEventCreate(&event));
     uint32_t batch = 0;
     auto gridSize = dim3(
-        ceilf((float)RES_X / 32.0),
+        ceilf((float)RES_X / 16.0),
         ceilf((float)RES_Y / 16.0)
     );
     auto blockSize = dim3(
-        32, 16
+        16, 16
     );
     
     while (true) {

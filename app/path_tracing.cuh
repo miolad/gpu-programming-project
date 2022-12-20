@@ -103,7 +103,7 @@ inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t 
  * @param batch batch number of this invocation
  * @param fb framebuffer of RES_X by RES_Y pixels to render to
  */
-__global__ void __launch_bounds__(32*16) pathTrace(
+__global__ void __launch_bounds__(16*16) pathTrace(
     Triangle* tris,
     Material* mats,
     uint32_t triNum,
@@ -140,7 +140,6 @@ __global__ void __launch_bounds__(32*16) pathTrace(
     // Will accumulate the contribution of SAMPLES_PER_BATCH samples
     float3 color = mats[cameraBounceIntersectionTri->materialIndex].emissivity * (float)SAMPLES_PER_BATCH;
 
-    #pragma unroll
     for (uint32_t sample = 0; sample < SAMPLES_PER_BATCH; ++sample) {
         auto r = cameraRay;
         auto throughput = initialThroughput;
@@ -148,7 +147,6 @@ __global__ void __launch_bounds__(32*16) pathTrace(
         auto t = ti;
 
         // Note that `bounce` starts at 1 because the first camera ray is cached for all samples in the batch
-        #pragma unroll
         for (uint32_t bounce = 1; bounce < MAX_BOUNCES; ++bounce) {
             // Get new ray
             auto n      = (dot(r.direction, intersectionTri->normal) < 0.0 ? 1.0 : -1.0) * intersectionTri->normal;
