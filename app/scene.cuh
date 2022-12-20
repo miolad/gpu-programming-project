@@ -41,6 +41,13 @@ public:
     /// @brief Camera associated to the scene. Loading an obj also initializes the camera
     Camera* m_camera;
 
+#ifndef NO_NEXT_EVENT_ESTIMATION
+    /// @brief List of all indices into `m_devTriangles` of triangle with an emissive material
+    uint32_t* m_devLights;
+    /// @brief Number of indices in `m_devLights`
+    uint32_t m_numLights;
+#endif
+
     Scene() : m_devTriangles(NULL), m_devMaterials(NULL), m_camera(NULL) { }
 
     /**
@@ -58,6 +65,10 @@ public:
         std::vector<Triangle> triangles;
         std::vector<Material> materials;
 
+#ifndef NO_NEXT_EVENT_ESTIMATION
+        std::vector<uint32_t> lights;
+#endif
+
         tinyobj::ObjReader reader;
         if (!reader.ParseFromFile(objFile, readerConfig)) {
             std::cerr << "Error reading scene from " << objFile << std::endl;
@@ -74,6 +85,26 @@ public:
         }
 
         auto attrib = reader.GetAttrib();
+
+        // Materials
+        for (const auto material : reader.GetMaterials()) {
+            Material mat = {
+                // Albedo
+                {
+                    material.diffuse[0],
+                    material.diffuse[1],
+                    material.diffuse[2]
+                },
+                // Emissivity
+                {
+                    material.emission[0],
+                    material.emission[1],
+                    material.emission[2]
+                }
+            };
+
+            materials.push_back(mat);
+        }
 
         // Triangles
         for (const auto shape : reader.GetShapes()) {
@@ -98,6 +129,15 @@ public:
                 }
 
                 tri.materialIndex = shape.mesh.material_ids[triangleIndex];
+
+#ifndef NO_NEXT_EVENT_ESTIMATION
+                auto emissivity = materials[tri.materialIndex].emissivity;
+                if (max(emissivity.x, max(emissivity.y, emissivity.z)) > EPS) {
+                    // Triangle is emissive, add to list of lights
+                    lights.push_back(triangles.size());
+                }
+#endif
+
                 triangles.push_back(tri);
             }
         }
@@ -107,26 +147,6 @@ public:
             m_camera = new Camera(resolution, make_float3(0.0, 0.0, 0.0), make_float3(0.0, 1.0, 0.0), make_float3(0.0, 0.0, -1.0), 65.0);
         }
 
-        // Materials
-        for (const auto material : reader.GetMaterials()) {
-            Material mat = {
-                // Albedo
-                {
-                    material.diffuse[0],
-                    material.diffuse[1],
-                    material.diffuse[2]
-                },
-                // Emissivity
-                {
-                    material.emission[0],
-                    material.emission[1],
-                    material.emission[2]
-                }
-            };
-
-            materials.push_back(mat);
-        }
-
         // Allocate device memory and copy buffers
         m_numTriangles = triangles.size();
         checkCudaErrors(cudaMalloc((void**)&m_devTriangles, m_numTriangles * sizeof(Triangle)));
@@ -134,6 +154,12 @@ public:
 
         checkCudaErrors(cudaMemcpy((void*)m_devTriangles, (void*)triangles.data(), m_numTriangles * sizeof(Triangle), cudaMemcpyHostToDevice));
         checkCudaErrors(cudaMemcpy((void*)m_devMaterials, (void*)materials.data(), materials.size() * sizeof(Material), cudaMemcpyHostToDevice));
+
+#ifndef NO_NEXT_EVENT_ESTIMATION
+        m_numLights = lights.size();
+        checkCudaErrors(cudaMalloc((void**)&m_devLights, m_numLights * sizeof(uint32_t)));
+        checkCudaErrors(cudaMemcpy((void*)m_devLights, (void*)lights.data(), m_numLights * sizeof(uint32_t), cudaMemcpyHostToDevice));
+#endif
 
         // Compute triangle normals
         computeTriangleNormals<<<ceil((float)m_numTriangles / 256.0), 256>>>(m_devTriangles, m_numTriangles);

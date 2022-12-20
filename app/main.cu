@@ -22,7 +22,12 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "DONE (" << scene.m_numTriangles << " triangles)" << std::endl;
+    std::cout << "DONE (" << scene.m_numTriangles << " triangles";
+#ifndef NO_NEXT_EVENT_ESTIMATION
+    std::cout << ", " << scene.m_numLights << " lights)" << std::endl;
+#else
+    std::cout << ")" << std::endl;
+#endif
 
     // Initialize viewer
     cudaDeviceProp deviceProps;
@@ -47,6 +52,10 @@ int main() {
             scene.m_devTriangles,
             scene.m_devMaterials,
             scene.m_numTriangles,
+#ifndef NO_NEXT_EVENT_ESTIMATION
+            scene.m_devLights,
+            scene.m_numLights,
+#endif
             *scene.m_camera,
             batch++,
             fb.m_devPtr

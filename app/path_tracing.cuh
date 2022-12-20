@@ -6,6 +6,10 @@
 #include "utils.cuh"
 #include "camera.cuh"
 
+#ifndef NO_NEXT_EVENT_ESTIMATION
+#include "next_event_estimation.cuh"
+#endif
+
 /**
  * Randomly samples the hemisphere defined by `w` with a cosine weighted distribution
  * 
@@ -99,6 +103,8 @@ inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t 
  * @param tris list of all the triangles in the scene
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
+ * @param lightsIndices indices of emissive triangles in `tris`
+ * @param lightsNum number of indices pointed to by `tris`
  * @param cam virtual camera
  * @param batch batch number of this invocation
  * @param fb framebuffer of RES_X by RES_Y pixels to render to
@@ -107,6 +113,10 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     Triangle* tris,
     Material* mats,
     uint32_t triNum,
+#ifndef NO_NEXT_EVENT_ESTIMATION
+    uint32_t* lightsIndices,
+    uint32_t lightsNum,
+#endif
     Camera cam,
     uint32_t batch,
     float3* fb
@@ -152,6 +162,22 @@ __global__ void __launch_bounds__(16*16) pathTrace(
             auto n      = (dot(r.direction, intersectionTri->normal) < 0.0 ? 1.0 : -1.0) * intersectionTri->normal;
             r.origin    = r.origin + r.direction * t + n * EPS; // Shift ray origin by a small amount to avoid self intersections due to floating point precision
             r.direction = sampleHemisphereCosineWeighted(&randState, n);
+
+#ifndef NO_NEXT_EVENT_ESTIMATION
+            // Sample direct lighting
+            auto directLighting = sampleLights(
+                &randState,
+                tris,
+                mats,
+                triNum,
+                lightsIndices,
+                lightsNum,
+                intersectionTri,
+                r.origin,
+                n
+            );
+            color = color + throughput * directLighting * ONE_OVER_PI;
+#endif
             
             // Intersect ray with geometry
             findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
@@ -162,8 +188,10 @@ __global__ void __launch_bounds__(16*16) pathTrace(
             // Get the intersection material
             Material* mat = mats + intersectionTri->materialIndex;
 
+#ifdef NO_NEXT_EVENT_ESTIMATION
             // Add emission to output color
             color = color + throughput * mat->emissivity;
+#endif
 
             // Add surface contribution to path throughput
             // Note that a lot of stuff cancels out here, due to the simple diffuse surface constraint.

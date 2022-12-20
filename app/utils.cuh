@@ -4,6 +4,7 @@
 #include <inttypes.h>
 
 #define PI                          3.14159265359
+#define ONE_OVER_PI                 0.31830988618
 /// @brief Horizontal resolution of the framebuffer
 #define RES_X                       800
 /// @brief Vertical resolution of the framebuffer
@@ -15,7 +16,7 @@
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
 #define RAY_MAX_T                   99999999.0
 /// @brief Number of samples to compute for each invocation of the main kernel
-#define SAMPLES_PER_BATCH           64
+#define SAMPLES_PER_BATCH           32
 /// @brief Maximum number of indirect light bounces
 #define MAX_BOUNCES                 8
 /// @brief Minimum bounces performed before employing russian roulette
