@@ -44,11 +44,13 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
     // Select sub-triangle area
     float areaS = curand_uniform(randState) * *solidAngle;
 
-    auto s = sinf(areaS - alpha);
-    auto t = cosf(areaS - alpha);
-    auto u = t - cosf(alpha);
-    auto v = s + sinf(alpha) * cosf(cLen);
-    auto q = ((v*t - u*s)*cosf(alpha) - v) / ((v*s + u*t)*sinf(alpha));
+    float s, t;
+    sincosf(areaS - alpha, &s, &t);
+    float sinAlpha, cosAlpha;
+    sincosf(alpha, &sinAlpha, &cosAlpha);
+    auto u = t - cosAlpha;
+    auto v = s + sinAlpha * cosf(cLen);
+    auto q = ((v*t - u*s)*cosAlpha - v) / ((v*s + u*t)*sinAlpha);
 
     // Compute third vertex of sub-triangle
     auto cS = q*a + sqrtf(1.0f - q*q)*ORTHOGONALIZE(a, c);

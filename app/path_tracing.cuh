@@ -24,9 +24,11 @@ inline __device__ float3 sampleHemisphereCosineWeighted(curandState* randState, 
     float cos_theta = sqrtf(1.0f - u1);
     float sin_theta = sqrtf(u1);
     float phi       = PI2 * u2;
+    float sinPhi, cosPhi;
+    sincosf(phi, &sinPhi, &cosPhi);
     float3 sample   = {
-        cosf(phi) * sin_theta,
-        sinf(phi) * sin_theta,
+        cosPhi * sin_theta,
+        sinPhi * sin_theta,
         cos_theta
     };
 

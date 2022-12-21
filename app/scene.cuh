@@ -7,13 +7,17 @@
 #include "helper.cuh"
 #include "camera.cuh"
 
+#ifndef NO_BVH
+#include "bvh.cuh"
+#endif
+
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
 /**
  * Computes normals for all the passed triangles
  * 
- * @param tris Device buffer containing all the triangles in the scene
+ * @param tris device buffer containing all the triangles in the scene
  * @param triNum number of triangles pointed to by `tris`
  */
 __global__ static void computeTriangleNormals(Triangle* tris, uint32_t triNum) {
@@ -163,6 +167,11 @@ public:
 
         // Compute triangle normals
         computeTriangleNormals<<<ceil((float)m_numTriangles / 256.0), 256>>>(m_devTriangles, m_numTriangles);
+
+#ifndef NO_BVH
+        // Build BVH
+        BVH bvh(triangles);
+#endif
 
         return true;
     }
