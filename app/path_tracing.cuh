@@ -21,9 +21,9 @@ inline __device__ float3 sampleHemisphereCosineWeighted(curandState* randState, 
     float u1 = curand_uniform(randState), u2 = curand_uniform(randState);
 
     // Generate sample direction in hemisphere over (0, 0, 1)
-    float cos_theta = sqrtf(1.0 - u1);
+    float cos_theta = sqrtf(1.0f - u1);
     float sin_theta = sqrtf(u1);
-    float phi       = 2.0 * PI * u2;
+    float phi       = PI2 * u2;
     float3 sample   = {
         cosf(phi) * sin_theta,
         sinf(phi) * sin_theta,
@@ -31,7 +31,7 @@ inline __device__ float3 sampleHemisphereCosineWeighted(curandState* randState, 
     };
 
     // Rotate the sample to match the provided normal
-    float3 u = normalize(cross(abs(w.x) > 0.1 ? float3{0.0, 1.0, 0.0} : float3{1.0, 0.0, 1.0}, w));
+    float3 u = normalize(cross(abs(w.x) > 0.1f ? float3{0.0f, 1.0f, 0.0f} : float3{1.0f, 0.0f, 1.0f}, w));
     float3 v = cross(u, w);
 
     return sample.x * u + sample.y * v + sample.z * w;
@@ -47,30 +47,30 @@ inline __device__ float3 sampleHemisphereCosineWeighted(curandState* randState, 
  *          to the point of the intersection, in world units.
  *          If no intersection is found, -1.0 is returned.
  */
-inline __device__ float rayTriangleIntersection(Ray& r, Triangle& tri) {
+inline __device__ float rayTriangleIntersection(Ray& r, const Triangle& tri) {
     auto edge1 = tri.v2 - tri.v1;
     auto edge2 = tri.v3 - tri.v1;
     auto h = cross(r.direction, edge2);
     auto a = dot(edge1, h);
 
     if (a > -EPS && a < EPS)
-        return -1.0;
+        return -1.0f;
 
-    auto f = 1.0 / a;
+    auto f = 1.0f / a;
     auto s = r.origin - tri.v1;
     auto u = f * dot(s, h);
 
-    if (u < 0.0 || u > 1.0)
-        return -1.0;
+    if (u < 0.0f || u > 1.0f)
+        return -1.0f;
 
     auto q = cross(s, edge1);
     auto v = f * dot(r.direction, q);
 
-    if (v < 0.0 || u + v > 1.0)
-        return -1.0;
+    if (v < 0.0f || u + v > 1.0f)
+        return -1.0f;
 
     auto t = f * dot(edge2, q);
-    return t > EPS ? t : -1.0;
+    return t > EPS ? t : -1.0f;
 }
 
 /**
@@ -83,16 +83,19 @@ inline __device__ float rayTriangleIntersection(Ray& r, Triangle& tri) {
  * @param intersectionTri (out) pointer to the closest triangle intersected, or NULL if no intersection was found
  * @param t (out) "time" of the ray to the closest intersection. This is invalid if intersectionTri is NULL
  */
-inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t) {
+inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t) {
     *t = RAY_MAX_T;
     *intersectionTri = NULL;
     
+    // This unroll increases register pressure (thus hurting occupancy), but doesn't really show any performance variations,
+    // neither positive nor negative
+    // #pragma unroll 4
     for (uint32_t i = 0; i < triNum; ++i) {
         float ti = rayTriangleIntersection(r, tris[i]);
 
-        if (ti > 0.0 && ti < *t) {
+        if (ti > 0.0f && ti < *t) {
             *t = ti;
-            *intersectionTri = tris + i;
+            *intersectionTri = const_cast<Triangle*>(tris + i);
         }
     }
 }
@@ -110,16 +113,16 @@ inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t 
  * @param fb framebuffer of RES_X by RES_Y pixels to render to
  */
 __global__ void __launch_bounds__(16*16) pathTrace(
-    Triangle* tris,
-    Material* mats,
+    const Triangle* __restrict__ tris,
+    const Material* __restrict__ mats,
     uint32_t triNum,
 #ifndef NO_NEXT_EVENT_ESTIMATION
-    uint32_t* lightsIndices,
+    const uint32_t* __restrict__ lightsIndices,
     uint32_t lightsNum,
 #endif
     Camera cam,
     uint32_t batch,
-    float3* fb
+    float3* __restrict__ fb
 ) {
     uint32_t x = threadIdx.x + blockIdx.x * blockDim.x;
     uint32_t y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -141,7 +144,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     findClosestIntersection(cameraRay, tris, triNum, &cameraBounceIntersectionTri, &ti);
 
     if (cameraBounceIntersectionTri == NULL) {
-        fb[pixelIndex] = make_float3(0.0, 0.0, 0.0);
+        fb[pixelIndex] = make_float3(0.0f, 0.0f, 0.0f);
         return;
     }
 
@@ -150,6 +153,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     // Will accumulate the contribution of SAMPLES_PER_BATCH samples
     float3 color = mats[cameraBounceIntersectionTri->materialIndex].emissivity * (float)SAMPLES_PER_BATCH;
 
+    #pragma unroll
     for (uint32_t sample = 0; sample < SAMPLES_PER_BATCH; ++sample) {
         auto r = cameraRay;
         auto throughput = initialThroughput;
@@ -157,9 +161,10 @@ __global__ void __launch_bounds__(16*16) pathTrace(
         auto t = ti;
 
         // Note that `bounce` starts at 1 because the first camera ray is cached for all samples in the batch
+        // #pragma unroll // This unroll hurts performance for some reason
         for (uint32_t bounce = 1; bounce < MAX_BOUNCES; ++bounce) {
             // Get new ray
-            auto n      = (dot(r.direction, intersectionTri->normal) < 0.0 ? 1.0 : -1.0) * intersectionTri->normal;
+            auto n      = (dot(r.direction, intersectionTri->normal) < 0.0f ? 1.0f : -1.0f) * intersectionTri->normal;
             r.origin    = r.origin + r.direction * t + n * EPS; // Shift ray origin by a small amount to avoid self intersections due to floating point precision
             r.direction = sampleHemisphereCosineWeighted(&randState, n);
 
@@ -186,7 +191,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
             if (intersectionTri == NULL) break;
 
             // Get the intersection material
-            Material* mat = mats + intersectionTri->materialIndex;
+            const Material* mat = mats + intersectionTri->materialIndex;
 
 #ifdef NO_NEXT_EVENT_ESTIMATION
             // Add emission to output color
@@ -204,16 +209,16 @@ __global__ void __launch_bounds__(16*16) pathTrace(
             if (bounce >= MIN_BOUNCES) {
                 auto p = max(throughput.x, max(throughput.y, throughput.z));
                 if (p < curand_uniform(&randState)) break;
-                throughput = throughput * (1.0/p);
+                throughput = throughput * (1.0f/p);
             }
         }
     }
 
     // Write normalized color to framebuffer
     fb[pixelIndex] = (
-        fb[pixelIndex] * float(batch) +
-        color * (1.0 / float(SAMPLES_PER_BATCH))
-    ) * (1.0 / float(batch + 1));
+        fb[pixelIndex] * (float)batch +
+        color * (1.0f / (float)SAMPLES_PER_BATCH)
+    ) * (1.0f / (float)(batch + 1));
 }
 
 #endif

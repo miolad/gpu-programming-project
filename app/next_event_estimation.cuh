@@ -17,7 +17,7 @@
  * @param solidAngle (out) the solid angle subtended by the triangle `tri` from the position `o`
  * @returns a normalized direction towards the triangle
  */
-inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState, float3 o, Triangle& tri, float* solidAngle) {
+inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState, float3 o, const Triangle& tri, float* solidAngle) {
     // Get the positions of the vertices of the triangle's projection on the unit sphere with center o
     auto a = normalize(tri.v1 - o);
     auto b = normalize(tri.v2 - o);
@@ -30,14 +30,14 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
     auto cb = ORTHOGONALIZE(b, c - b);
     auto bc = ORTHOGONALIZE(c, b - c);
     auto ac = ORTHOGONALIZE(c, a - c);
-    auto alpha = acosf(clamp(dot(ba, ca), -1.0, 1.0));
-    auto beta = acosf(clamp(dot(ab, cb), -1.0, 1.0));
-    auto gamma = acosf(clamp(dot(bc, ac), -1.0, 1.0));
+    auto alpha = acosf(clamp(dot(ba, ca), -1.0f, 1.0f));
+    auto beta = acosf(clamp(dot(ab, cb), -1.0f, 1.0f));
+    auto gamma = acosf(clamp(dot(bc, ac), -1.0f, 1.0f));
 
     // Calculate lengths of spherical triangle's edges
-    auto aLen = acosf(clamp(dot(b, c), -1.0, 1.0));
-    auto bLen = acosf(clamp(dot(c, a), -1.0, 1.0));
-    auto cLen = acosf(clamp(dot(a, b), -1.0, 1.0));
+    auto aLen = acosf(clamp(dot(b, c), -1.0f, 1.0f));
+    auto bLen = acosf(clamp(dot(c, a), -1.0f, 1.0f));
+    auto cLen = acosf(clamp(dot(a, b), -1.0f, 1.0f));
 
     *solidAngle = alpha + beta + gamma - PI;
 
@@ -51,13 +51,13 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
     auto q = ((v*t - u*s)*cosf(alpha) - v) / ((v*s + u*t)*sinf(alpha));
 
     // Compute third vertex of sub-triangle
-    auto cS = q*a + sqrtf(1.0 - q*q)*ORTHOGONALIZE(a, c);
-    auto z = 1.0 - curand_uniform(randState)*(1.0 - dot(cS, b));
+    auto cS = q*a + sqrtf(1.0f - q*q)*ORTHOGONALIZE(a, c);
+    auto z = 1.0f - curand_uniform(randState)*(1.0f - dot(cS, b));
 
-    return z*b + sqrtf(1.0 - z*z)*ORTHOGONALIZE(b, cS);
+    return z*b + sqrtf(1.0f - z*z)*ORTHOGONALIZE(b, cS);
 }
 
-inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t);
+inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t);
 
 /**
  * Checks if a given ray hits a specific triangle first
@@ -68,7 +68,7 @@ inline __device__ void findClosestIntersection(Ray& r, Triangle* tris, uint32_t 
  * @param triNum number of triangles pointed to by `tris`
  * @returns true if there is visibility between the two points, false otherwise
  */
-inline __device__ bool visibility(Ray& r, Triangle* to, Triangle* tris, uint32_t triNum) {
+inline __device__ bool visibility(Ray& r, const Triangle* to, const Triangle* tris, uint32_t triNum) {
     Triangle* intersectionTri;
     float t;
     findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
@@ -91,11 +91,11 @@ inline __device__ bool visibility(Ray& r, Triangle* to, Triangle* tris, uint32_t
  */
 inline __device__ float3 sampleLight(
     curandState* randState,
-    Triangle* tris,
-    Material* mats,
+    const Triangle* tris,
+    const Material* mats,
     uint32_t triNum,
     uint32_t lightIndex,
-    Triangle* currentHit,
+    const Triangle* currentHit,
     float3 samplePosition,
     float3 n
 ) {
@@ -104,7 +104,7 @@ inline __device__ float3 sampleLight(
     auto sampleDirection = sampleTriangleUniformSolidAngle(randState, samplePosition, tris[lightIndex], &solidAngle);
 
     // Check for NaN (TODO: this is not great)
-    if (sampleDirection.x != sampleDirection.x) return make_float3(0.0, 0.0, 0.0);
+    if (sampleDirection.x != sampleDirection.x) return make_float3(0.0f, 0.0f, 0.0f);
     
     Ray r = {
         samplePosition,
@@ -115,12 +115,12 @@ inline __device__ float3 sampleLight(
     auto dotnw = dot(sampleDirection, n);
 
     // Check if the sample is behind the current hit
-    if (dotnw < 0.0) return make_float3(0.0, 0.0, 0.0);
+    if (dotnw < 0.0f) return make_float3(0.0f, 0.0f, 0.0f);
     
-    return mats[tris[lightIndex].materialIndex].emissivity              * // emissivity
-           (visibility(r, tris + lightIndex, tris, triNum) ? 1.0 : 0.0) * // visibility
-           dotnw                                                        * // cosine term
-           solidAngle;                                                    // 1/pdf of sample
+    return mats[tris[lightIndex].materialIndex].emissivity                * // emissivity
+           (visibility(r, tris + lightIndex, tris, triNum) ? 1.0f : 0.0f) * // visibility
+           dotnw                                                          * // cosine term
+           solidAngle;                                                      // 1/pdf of sample
 }
 
 /**
@@ -139,12 +139,12 @@ inline __device__ float3 sampleLight(
  */
 inline __device__ float3 sampleLights(
     curandState* randState,
-    Triangle* tris,
-    Material* mats,
+    const Triangle* tris,
+    const Material* mats,
     uint32_t triNum,
-    uint32_t* lightsIndices,
+    const uint32_t* lightsIndices,
     uint32_t lightsNum,
-    Triangle* currentHit,
+    const Triangle* currentHit,
     float3 samplePosition,
     float3 n
 ) {
@@ -152,7 +152,7 @@ inline __device__ float3 sampleLights(
     
     // If we can't choose a suitable light from `lightsIndices`, return immediately
     if (lightsNum == 0 || (lightsNum == 1 && *lightsIndices == currentHitIndex)) {
-        return make_float3(0.0, 0.0, 0.0);
+        return make_float3(0.0f, 0.0f, 0.0f);
     }
 
     // Choose a light to sample randomly
