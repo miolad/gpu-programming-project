@@ -13,11 +13,11 @@
 /// @brief Scene to load
 #define SCENE                       "scenes/cornell_box.obj"
 /// @brief Approximation of zero, needed to deal with possible rounding errors in floating point arithmetic
-#define EPS                         0.000001
+#define EPS                         0.000001f
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
-#define RAY_MAX_T                   99999999.0
+#define RAY_MAX_T                   99999999.0f
 /// @brief Number of samples to compute for each invocation of the main kernel
-#define SAMPLES_PER_BATCH           128
+#define SAMPLES_PER_BATCH           256
 /// @brief Maximum number of indirect light bounces
 #define MAX_BOUNCES                 8
 /// @brief Minimum bounces performed before employing russian roulette

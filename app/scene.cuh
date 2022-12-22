@@ -20,7 +20,7 @@
  * @param tris device buffer containing all the triangles in the scene
  * @param triNum number of triangles pointed to by `tris`
  */
-__global__ static void computeTriangleNormals(Triangle* tris, uint32_t triNum) {
+__global__ void computeTriangleNormals(Triangle* tris, uint32_t triNum) {
     uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= triNum) return;
 

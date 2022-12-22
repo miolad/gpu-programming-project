@@ -2,8 +2,7 @@
 #define _NEXT_EVENT_ESTIMATION_CUH_
 
 #include <curand_kernel.h>
-#include "utils.cuh"
-#include "path_tracing.cuh"
+#include "ray_tracing.cuh"
 
 #define ORTHOGONALIZE(a, b) normalize(b - dot(a, b)*a)
 
@@ -57,25 +56,6 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
     auto z = 1.0f - curand_uniform(randState)*(1.0f - dot(cS, b));
 
     return z*b + sqrtf(1.0f - z*z)*ORTHOGONALIZE(b, cS);
-}
-
-inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t);
-
-/**
- * Checks if a given ray hits a specific triangle first
- * 
- * @param r the ray
- * @param to the destination triangle
- * @param tris list of all the triangles
- * @param triNum number of triangles pointed to by `tris`
- * @returns true if there is visibility between the two points, false otherwise
- */
-inline __device__ bool visibility(Ray& r, const Triangle* to, const Triangle* tris, uint32_t triNum) {
-    Triangle* intersectionTri;
-    float t;
-    findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
-
-    return intersectionTri == to;
 }
 
 /**
