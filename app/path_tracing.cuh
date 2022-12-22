@@ -46,6 +46,7 @@ inline __device__ float3 sampleHemisphereCosineWeighted(curandState* randState, 
  * @param tris list of all the triangles in the scene
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
+ * @param bvhRoot root node of the BVH
  * @param lightsIndices indices of emissive triangles in `tris`
  * @param lightsNum number of indices pointed to by `tris`
  * @param cam virtual camera
@@ -56,6 +57,9 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     const Triangle* __restrict__ tris,
     const Material* __restrict__ mats,
     uint32_t triNum,
+#ifndef NO_BVH
+    const Node* bvhRoot,
+#endif
 #ifndef NO_NEXT_EVENT_ESTIMATION
     const uint32_t* __restrict__ lightsIndices,
     uint32_t lightsNum,
@@ -81,7 +85,12 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     // Cache first bounce for all samples in this batch
     Triangle* cameraBounceIntersectionTri;
     float ti;
-    findClosestIntersection(cameraRay, tris, triNum, &cameraBounceIntersectionTri, &ti);
+    findClosestIntersection(cameraRay, tris, triNum,
+#ifndef NO_BVH
+        bvhRoot,
+#endif
+        &cameraBounceIntersectionTri, &ti
+    );
 
     if (cameraBounceIntersectionTri == NULL) {
         fb[pixelIndex] = make_float3(0.0f, 0.0f, 0.0f);
@@ -115,6 +124,9 @@ __global__ void __launch_bounds__(16*16) pathTrace(
                 tris,
                 mats,
                 triNum,
+#ifndef NO_BVH
+                bvhRoot,
+#endif
                 lightsIndices,
                 lightsNum,
                 intersectionTri,
@@ -125,7 +137,12 @@ __global__ void __launch_bounds__(16*16) pathTrace(
 #endif
             
             // Intersect ray with geometry
-            findClosestIntersection(r, tris, triNum, &intersectionTri, &t);
+            findClosestIntersection(r, tris, triNum,
+#ifndef NO_BVH
+                bvhRoot,
+#endif
+                &intersectionTri, &t
+            );
 
             // if no intersection, break the loop, this sample is done
             if (intersectionTri == NULL) break;

@@ -52,6 +52,9 @@ int main() {
             scene.m_devTriangles,
             scene.m_devMaterials,
             scene.m_numTriangles,
+#ifndef NO_BVH
+            scene.m_bvh->m_devRoot,
+#endif
 #ifndef NO_NEXT_EVENT_ESTIMATION
             scene.m_devLights,
             scene.m_numLights,

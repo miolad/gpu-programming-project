@@ -65,6 +65,7 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
  * @param tris list of all the triangles in the scene
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
+ * @param bvhRoot root node of the BVH
  * @param lightIndex index of the light to sample in `tris`
  * @param currentHit the triangle from which to sample direct lighting
  * @param samplePosition position in world space from which to sample direct lighting
@@ -76,6 +77,9 @@ inline __device__ float3 sampleLight(
     const Triangle* tris,
     const Material* mats,
     uint32_t triNum,
+#ifndef NO_BVH
+    const Node* bvhRoot,
+#endif
     uint32_t lightIndex,
     const Triangle* currentHit,
     float3 samplePosition,
@@ -98,9 +102,15 @@ inline __device__ float3 sampleLight(
 
     // Check if the sample is behind the current hit
     if (dotnw < 0.0f) return make_float3(0.0f, 0.0f, 0.0f);
+
+    auto vis = visibility(r, tris + lightIndex, tris, triNum
+#ifndef NO_BVH
+        , bvhRoot
+#endif
+    );
     
     return mats[tris[lightIndex].materialIndex].emissivity                * // emissivity
-           (visibility(r, tris + lightIndex, tris, triNum) ? 1.0f : 0.0f) * // visibility
+           (vis ? 1.0f : 0.0f)                                            * // visibility
            dotnw                                                          * // cosine term
            solidAngle;                                                      // 1/pdf of sample
 }
@@ -112,6 +122,7 @@ inline __device__ float3 sampleLight(
  * @param tris list of all the triangles in the scene
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
+ * @param bvhRoot root node of the BVH
  * @param lightsIndices indices of emissive triangles in `tris`
  * @param lightsNum number of indices pointed to by `tris`
  * @param currentHit the triangle from which to sample direct lighting
@@ -124,6 +135,9 @@ inline __device__ float3 sampleLights(
     const Triangle* tris,
     const Material* mats,
     uint32_t triNum,
+#ifndef NO_BVH
+    const Node* bvhRoot,
+#endif
     const uint32_t* lightsIndices,
     uint32_t lightsNum,
     const Triangle* currentHit,
@@ -145,7 +159,12 @@ inline __device__ float3 sampleLights(
 
     // Note that we multiply by lightsNum. That is because we are sampling only one random light, and not
     // all lightsNum of them
-    return (float)lightsNum * sampleLight(randState, tris, mats, triNum, lightIndex, currentHit, samplePosition, n);
+    return (float)lightsNum * sampleLight(randState, tris, mats, triNum,
+#ifndef NO_BVH
+        bvhRoot,
+#endif
+        lightIndex, currentHit, samplePosition, n
+    );
 }
 
 #endif

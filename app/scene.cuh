@@ -44,6 +44,10 @@ public:
     uint32_t  m_numTriangles;
     /// @brief Camera associated to the scene. Loading an obj also initializes the camera
     Camera* m_camera;
+#ifndef NO_BVH
+    /// @brief BVH acceleration structure
+    BVH* m_bvh;
+#endif
 
 #ifndef NO_NEXT_EVENT_ESTIMATION
     /// @brief List of all indices into `m_devTriangles` of triangle with an emissive material
@@ -170,7 +174,7 @@ public:
 
 #ifndef NO_BVH
         // Build BVH
-        BVH bvh(triangles);
+        m_bvh = new BVH(triangles);
 #endif
 
         return true;
@@ -189,6 +193,13 @@ public:
         if (m_camera != NULL) {
             delete m_camera;
         }
+
+#ifndef NO_BVH
+        // Deallocate BVH
+        if (m_bvh != NULL) {
+            delete m_bvh;
+        }
+#endif
     }
 };
 
