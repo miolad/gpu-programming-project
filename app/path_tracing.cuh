@@ -47,6 +47,7 @@ inline __device__ float3 sampleHemisphereCosineWeighted(curandState* randState, 
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
  * @param bvhRoot root node of the BVH
+ * @param bvhCachedNodesNum number of nodes of the BVH to cache in shared memory
  * @param lightsIndices indices of emissive triangles in `tris`
  * @param lightsNum number of indices pointed to by `tris`
  * @param cam virtual camera
@@ -58,7 +59,8 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     const Material* __restrict__ mats,
     uint32_t triNum,
 #ifndef NO_BVH
-    const Node* bvhRoot,
+    const Node* __restrict__ bvhRoot,
+    uint32_t bvhCachedNodesNum,
 #endif
 #ifndef NO_NEXT_EVENT_ESTIMATION
     const uint32_t* __restrict__ lightsIndices,
@@ -71,6 +73,16 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     uint32_t x = threadIdx.x + blockIdx.x * blockDim.x;
     uint32_t y = threadIdx.y + blockIdx.y * blockDim.y;
     uint32_t pixelIndex = x + y * RES_X;
+
+#ifndef NO_BVH
+    // Cache part of the BVH into shared memory
+    extern __shared__ Node s_bvhCache[];
+
+    for (uint32_t loadIndex = threadIdx.x + threadIdx.y*blockDim.x; loadIndex < bvhCachedNodesNum; loadIndex += blockDim.x*blockDim.y) {
+        s_bvhCache[loadIndex] = bvhRoot[loadIndex];
+    }
+    __syncthreads();
+#endif
 
     // Terminate pixels outside the framebuffer
     if (x >= RES_X || y >= RES_Y) return;
@@ -88,6 +100,8 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     findClosestIntersection(cameraRay, tris, triNum,
 #ifndef NO_BVH
         bvhRoot,
+        s_bvhCache,
+        bvhCachedNodesNum,
 #endif
         &cameraBounceIntersectionTri, &ti
     );
@@ -126,6 +140,8 @@ __global__ void __launch_bounds__(16*16) pathTrace(
                 triNum,
 #ifndef NO_BVH
                 bvhRoot,
+                s_bvhCache,
+                bvhCachedNodesNum,
 #endif
                 lightsIndices,
                 lightsNum,
@@ -134,12 +150,17 @@ __global__ void __launch_bounds__(16*16) pathTrace(
                 n
             );
             color = color + throughput * directLighting * ONE_OVER_PI;
+
+            // Don't trace useless rays
+            if (bounce == MAX_BOUNCES - 1) break;
 #endif
             
             // Intersect ray with geometry
             findClosestIntersection(r, tris, triNum,
 #ifndef NO_BVH
                 bvhRoot,
+                s_bvhCache,
+                bvhCachedNodesNum,
 #endif
                 &intersectionTri, &t
             );

@@ -150,6 +150,8 @@ private:
 public:
     /// @brief Device pointer to the root node of the BVH
     Node* m_devRoot;
+    /// @brief Number of nodes in the BVH
+    uint32_t m_numNodes;
     
     /**
      * Build a BVH from a list of triangles and upload it to device memory
@@ -268,9 +270,11 @@ public:
             }
         }
 
+        m_numNodes = bvh.size();
+
         // Transfer the BVH to the GPU
-        checkCudaErrors(cudaMalloc((void**)&m_devRoot, bvh.size() * sizeof(Node)));
-        checkCudaErrors(cudaMemcpy((void*)m_devRoot, (void*)bvh.data(), bvh.size() * sizeof(Node), cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMalloc((void**)&m_devRoot, m_numNodes * sizeof(Node)));
+        checkCudaErrors(cudaMemcpy((void*)m_devRoot, (void*)bvh.data(), m_numNodes * sizeof(Node), cudaMemcpyHostToDevice));
     }
 
     ~BVH() {

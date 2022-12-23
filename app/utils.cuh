@@ -17,11 +17,15 @@
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
 #define RAY_MAX_T                   99999999.0f
 /// @brief Number of samples to compute for each invocation of the main kernel
-#define SAMPLES_PER_BATCH           8
+#define SAMPLES_PER_BATCH           16
 /// @brief Maximum number of indirect light bounces
 #define MAX_BOUNCES                 8
 /// @brief Minimum bounces performed before employing russian roulette
 #define MIN_BOUNCES                 4
+#ifndef NO_BVH
+/// @brief How much shared memory to use for caching the BVH
+#define USE_SHARED_MEMORY_AMOUNT    (48 << 10)
+#endif
 
 /**
  * Triangle representation in device memory

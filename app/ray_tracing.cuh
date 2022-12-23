@@ -5,6 +5,8 @@
 
 #ifndef NO_BVH
 #include "bvh.cuh"
+
+#define GET_BVH_NODE(sRoot, gRoot, numCached, index) ((index < numCached ? sRoot : gRoot) + index) 
 #endif
 
 /**
@@ -90,10 +92,21 @@ inline __device__ float rayAABBIntersection(Ray& r, const AABB& aabb) {
  * @param tris list of all the triangles
  * @param triNum number of triangles pointed to by `tris`
  * @param bvhRoot root node of the BVH
+ * @param bvhCache cache of the BVH in shared memory
+ * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
  * @param intersectionTri (out) pointer to the closest triangle intersected, or NULL if no intersection was found
  * @param t (out) "time" of the ray to the closest intersection. This is invalid if intersectionTri is NULL
  */
-inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uint32_t triNum, const Node* bvhRoot, Triangle** intersectionTri, float* t) {
+inline __device__ void findClosestIntersection(
+    Ray& r,
+    const Triangle* tris,
+    uint32_t triNum,
+    const Node* bvhRoot,
+    const Node* bvhCache,
+    uint32_t bvhCachedNodesNum,
+    Triangle** intersectionTri,
+    float* t
+) {
     *t = RAY_MAX_T;
     *intersectionTri = NULL;
     
@@ -101,11 +114,11 @@ inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uin
     const Node** stackPtr = stack;
     *stackPtr++ = NULL;
 
-    const Node* node = bvhRoot;
+    const Node* node = GET_BVH_NODE(bvhCache, bvhRoot, bvhCachedNodesNum, 0);
     do {
         // Note that this breaks if the root is a leaf node, i.e. if the scene has only one triangle
-        auto childL = &bvhRoot[node->node.internal.left];
-        auto childR = childL + 1;
+        auto childL = GET_BVH_NODE(bvhCache, bvhRoot, bvhCachedNodesNum, node->node.internal.left);
+        auto childR = GET_BVH_NODE(bvhCache, bvhRoot, bvhCachedNodesNum, node->node.internal.left + 1);
 
         auto aabbIntersectionTL = rayAABBIntersection(r, childL->aabb);
         auto aabbIntersectionTR = rayAABBIntersection(r, childR->aabb);
@@ -178,9 +191,19 @@ inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uin
  * @param tris list of all the triangles
  * @param triNum number of triangles pointed to by `tris`
  * @param bvhRoot root node of the BVH
+ * @param bvhCache cache of the BVH in shared memory
+ * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
  * @returns true if there is visibility between the two points, false otherwise
  */
-inline __device__ bool visibility(Ray& r, const Triangle* to, const Triangle* tris, uint32_t triNum, const Node* bvhRoot) {
+inline __device__ bool visibility(
+    Ray& r,
+    const Triangle* to,
+    const Triangle* tris,
+    uint32_t triNum,
+    const Node* bvhRoot,
+    const Node* bvhCache,
+    uint32_t bvhCachedNodesNum
+) {
     // Get the intersection point of the ray with the destination triangle
     auto maxT = rayTriangleIntersection(r, *to) - EPS;
     
@@ -188,11 +211,11 @@ inline __device__ bool visibility(Ray& r, const Triangle* to, const Triangle* tr
     const Node** stackPtr = stack;
     *stackPtr++ = NULL;
 
-    const Node* node = bvhRoot;
+    const Node* node = GET_BVH_NODE(bvhCache, bvhRoot, bvhCachedNodesNum, 0);
     do {
         // Note that this breaks if the root is a leaf node, i.e. if the scene has only one triangle
-        auto childL = &bvhRoot[node->node.internal.left];
-        auto childR = childL + 1;
+        auto childL = GET_BVH_NODE(bvhCache, bvhRoot, bvhCachedNodesNum, node->node.internal.left);
+        auto childR = GET_BVH_NODE(bvhCache, bvhRoot, bvhCachedNodesNum, node->node.internal.left + 1);
 
         auto aabbIntersectionTL = rayAABBIntersection(r, childL->aabb);
         auto aabbIntersectionTR = rayAABBIntersection(r, childR->aabb);

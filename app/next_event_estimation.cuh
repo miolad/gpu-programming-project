@@ -66,6 +66,8 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
  * @param bvhRoot root node of the BVH
+ * @param bvhCache cache of the BVH in shared memory
+ * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
  * @param lightIndex index of the light to sample in `tris`
  * @param currentHit the triangle from which to sample direct lighting
  * @param samplePosition position in world space from which to sample direct lighting
@@ -79,6 +81,8 @@ inline __device__ float3 sampleLight(
     uint32_t triNum,
 #ifndef NO_BVH
     const Node* bvhRoot,
+    const Node* bvhCache,
+    uint32_t bvhCachedNodesNum,
 #endif
     uint32_t lightIndex,
     const Triangle* currentHit,
@@ -105,7 +109,9 @@ inline __device__ float3 sampleLight(
 
     auto vis = visibility(r, tris + lightIndex, tris, triNum
 #ifndef NO_BVH
-        , bvhRoot
+        , bvhRoot,
+        bvhCache,
+        bvhCachedNodesNum
 #endif
     );
     
@@ -123,6 +129,8 @@ inline __device__ float3 sampleLight(
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
  * @param bvhRoot root node of the BVH
+ * @param bvhCache cache of the BVH in shared memory
+ * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
  * @param lightsIndices indices of emissive triangles in `tris`
  * @param lightsNum number of indices pointed to by `tris`
  * @param currentHit the triangle from which to sample direct lighting
@@ -137,6 +145,8 @@ inline __device__ float3 sampleLights(
     uint32_t triNum,
 #ifndef NO_BVH
     const Node* bvhRoot,
+    const Node* bvhCache,
+    uint32_t bvhCachedNodesNum,
 #endif
     const uint32_t* lightsIndices,
     uint32_t lightsNum,
@@ -162,6 +172,8 @@ inline __device__ float3 sampleLights(
     return (float)lightsNum * sampleLight(randState, tris, mats, triNum,
 #ifndef NO_BVH
         bvhRoot,
+        bvhCache,
+        bvhCachedNodesNum,
 #endif
         lightIndex, currentHit, samplePosition, n
     );

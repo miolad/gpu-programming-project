@@ -46,14 +46,27 @@ int main() {
         16, 16
     );
     
+#ifndef NO_BVH
+    uint32_t bvhCachedNodesNum = min(scene.m_bvh->m_numNodes, (uint32_t)(USE_SHARED_MEMORY_AMOUNT / sizeof(Node)));
+#endif
+
+    uint32_t sharedMemoryAmount =
+#ifndef NO_BVH
+        bvhCachedNodesNum * sizeof(Node)
+#else
+        0
+#endif
+    ;
+
     while (true) {
         checkCudaErrors(cudaEventRecord(event));
-        pathTrace<<<gridSize, blockSize>>>(
+        pathTrace<<<gridSize, blockSize, sharedMemoryAmount>>>(
             scene.m_devTriangles,
             scene.m_devMaterials,
             scene.m_numTriangles,
 #ifndef NO_BVH
             scene.m_bvh->m_devRoot,
+            bvhCachedNodesNum,
 #endif
 #ifndef NO_NEXT_EVENT_ESTIMATION
             scene.m_devLights,
