@@ -11,15 +11,15 @@
 /// @brief Vertical resolution of the framebuffer
 #define RES_Y                       600
 /// @brief Scene to load
-#define SCENE                       "scenes/cornell_box_suzanne.obj"
+#define SCENE                       "scenes/cornell_box_dragon.obj"
 /// @brief Approximation of zero, needed to deal with possible rounding errors in floating point arithmetic
-#define EPS                         0.0001f
+#define EPS                         0.000001f
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
 #define RAY_MAX_T                   99999999.0f
 /// @brief Number of samples to compute for each invocation of the main kernel
-#define SAMPLES_PER_BATCH           16
+#define SAMPLES_PER_BATCH           32
 /// @brief Maximum number of indirect light bounces
-#define MAX_BOUNCES                 8
+#define MAX_BOUNCES                 4
 /// @brief Minimum bounces performed before employing russian roulette
 #define MIN_BOUNCES                 4
 #ifndef NO_BVH

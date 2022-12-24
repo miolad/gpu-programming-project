@@ -1,4 +1,5 @@
 .vscode
 app/cuda_viewer*
 app/app*
+app/out.png
 cuda-viewer/target

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <chrono>
+#include <thread>
 #include <inttypes.h>
 
 #include "helper.cuh"
@@ -79,13 +81,16 @@ int main() {
         checkCudaErrors(cudaGetLastError());
 
         // Run the viewer's event loop while we wait to resubmit the CUDA kernel
-        // bool shouldClose = false;
-        // while (!(shouldClose = viewer::run_event_loop(viewerCtx)) && cudaEventQuery(event) != cudaSuccess);
-        checkCudaErrors(cudaEventSynchronize(event));
-        if (viewer::run_event_loop(viewerCtx)) break;
+        bool shouldClose = false;
+        while (!(shouldClose = viewer::run_event_loop(viewerCtx)) && cudaEventQuery(event) != cudaSuccess) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        }
 
-        // if (shouldClose) break;
+        if (shouldClose) break;
     }
+
+    // Write framebuffer to PNG file
+    fb.saveToPNG();
 
     checkCudaErrors(cudaEventDestroy(event));
 

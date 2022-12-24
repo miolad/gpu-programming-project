@@ -92,7 +92,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     curand_init(batch, pixelIndex, 0, &randState);
 
     // Get this pixel's camera ray (flipping the y axis)
-    auto cameraRay = cam.getRayThroughPixel(make_int2(x, RES_Y - y - 1));
+    auto cameraRay = cam.getRayThroughPixel(make_int2(x, RES_Y - y - 1), batch % 16);
 
     // Cache first bounce for all samples in this batch
     Triangle* cameraBounceIntersectionTri;
@@ -125,7 +125,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
 
         // Note that `bounce` starts at 1 because the first camera ray is cached for all samples in the batch
         // #pragma unroll // This unroll hurts performance for some reason
-        for (uint32_t bounce = 1; bounce < MAX_BOUNCES; ++bounce) {
+        for (uint32_t bounce = 0; bounce <= MAX_BOUNCES; ++bounce) {
             // Get new ray
             auto n      = (dot(r.direction, intersectionTri->normal) < 0.0f ? 1.0f : -1.0f) * intersectionTri->normal;
             r.origin    = r.origin + r.direction * t + n * EPS; // Shift ray origin by a small amount to avoid self intersections due to floating point precision
@@ -152,7 +152,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
             color = color + throughput * directLighting * ONE_OVER_PI;
 
             // Don't trace useless rays
-            if (bounce == MAX_BOUNCES - 1) break;
+            if (bounce == MAX_BOUNCES) break;
 #endif
             
             // Intersect ray with geometry
@@ -190,6 +190,9 @@ __global__ void __launch_bounds__(16*16) pathTrace(
                 throughput = throughput * (1.0f/p);
             }
         }
+
+        //  This helps improve divergence, and thus performance in general
+        __syncthreads();
     }
 
     // Write normalized color to framebuffer

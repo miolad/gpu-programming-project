@@ -5,6 +5,7 @@
 #include <cuda.h>
 #include "helper.cuh"
 #include "utils.cuh"
+#include "lodepng.h"
 
 #define ROUND_UP_TO_GRANULARITY(x, n) (((x + n - 1) / n) * n)
 
@@ -16,6 +17,32 @@
 #include <sddl.h>
 #include <winternl.h>
 #endif
+
+/**
+ * Performs gamma correction on the framebuffer and compresses it into 8-bit, RGB pixels
+ * 
+ * @param fb input framebuffer
+ * @param out output buffer to store the result into
+ */
+__global__ void prepareFbForOutput(const float3* __restrict__ fb, uint8_t* __restrict__ out) {
+    uint32_t x = threadIdx.x + blockIdx.x*blockDim.x;
+    uint32_t y = threadIdx.y + blockIdx.y*blockDim.y;
+    uint32_t pixelIndex = x + y*RES_X;
+
+    if (x >= RES_X || y >= RES_Y) return;
+
+    float3 pixel = fb[pixelIndex];
+    
+    // Perform gamma correction
+    pixel.x = powf(pixel.x, 1.0f / 2.2f);
+    pixel.y = powf(pixel.y, 1.0f / 2.2f);
+    pixel.z = powf(pixel.z, 1.0f / 2.2f);
+
+    // Write to 8-bit channels
+    out[3*pixelIndex + 0] = (uint8_t)clamp(pixel.x * 256.0f, 0.0f, 255.0f);
+    out[3*pixelIndex + 1] = (uint8_t)clamp(pixel.y * 256.0f, 0.0f, 255.0f);
+    out[3*pixelIndex + 2] = (uint8_t)clamp(pixel.z * 256.0f, 0.0f, 255.0f);
+}
 
 /**
  * Simple abstraction over the creation of shareable memory for the app's framebuffer
@@ -105,6 +132,32 @@ public:
 
         // Clear the framebuffer
         checkCudaErrors(cudaMemset((void*)m_devPtr, 0, m_size));
+    }
+
+    /**
+     * Perform gamma correction to sRGB, then save the current contents of the framebuffer to a PNG image
+     */
+    void saveToPNG() {
+        uint8_t* h_tmpBuf, * d_tmpBuf;
+        
+        // Allocate temporary buffer in host and device memory
+        checkCudaErrors(cudaMallocHost((void**)&h_tmpBuf, RES_X*RES_Y*3));
+        checkCudaErrors(cudaMalloc((void**)&d_tmpBuf, RES_X*RES_Y*3));
+
+        // Prepare framebuffer for output
+        prepareFbForOutput<<<dim3(ceilf((float)RES_X / 32.0f), ceilf((float)RES_Y / 32.0f)), dim3(32, 32)>>>(m_devPtr, d_tmpBuf);
+
+        // Transfer result to host memory (this also serves as synchronization point)
+        checkCudaErrors(cudaMemcpy((void*)h_tmpBuf, (void*)d_tmpBuf, RES_X*RES_Y*3, cudaMemcpyDeviceToHost));
+
+        // Encode PNG and write to file
+        auto err = lodepng::encode("out.png", h_tmpBuf, RES_X, RES_Y, LCT_RGB, 8);
+        if (err) std::cout << "PNG encode error: " << lodepng_error_text(err) << std::endl;
+        else     std::cout << "Written output to out.png" << std::endl;
+
+        // Free temporary buffers
+        checkCudaErrors(cudaFreeHost((void*)h_tmpBuf));
+        checkCudaErrors(cudaFree((void*)d_tmpBuf));
     }
 
     ~Framebuffer() {

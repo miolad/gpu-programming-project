@@ -15,4 +15,4 @@ RUN echo "deb https://repo.download.nvidia.com/jetson/common r32 main" >> /etc/a
 RUN apt update && apt install -y cuda-toolkit-10-0 && apt clean
 
 CMD cd /proj/cuda-viewer && cargo b --release --features zero-copy-mem -Z sparse-registry && \
-    cd /proj/app && nvcc main.cu -o app -lcuda_viewer -I. -L../cuda-viewer/target/release -DUSE_ZERO_COPY_MEMORY -use_fast_math
+    cd /proj/app && nvcc main.cu lodepng.cpp -o app -lcuda_viewer -I. -L../cuda-viewer/target/release -DUSE_ZERO_COPY_MEMORY -use_fast_math

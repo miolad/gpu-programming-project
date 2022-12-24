@@ -4,7 +4,7 @@
 #include "utils.cuh"
 
 /**
- * Simple fixed virtual camera
+ * Simple virtual camera with supersampling antialiasing
  */
 class Camera {
 private:
@@ -36,22 +36,25 @@ public:
         m_viewDir = normalize(viewDirection);
         m_right = normalize(cross(m_viewDir, normalizedUp));
         m_up = normalize(cross(m_right, m_viewDir));
-        m_halfResolution = make_float2((float)resolution.x, (float)resolution.y) * 0.5;
-        m_pixelSize = tanf(hfov * PI / 360.0) / m_halfResolution.x;
+        m_halfResolution = make_float2((float)resolution.x, (float)resolution.y) * 0.5f;
+        m_pixelSize = tanf(hfov * PI / 360.0f) / m_halfResolution.x;
     }
 
     /**
-     * Generate a ray from the camera position to the specified screen's pixel
+     * Generate a ray from the camera position to the specified screen's pixel with 4xSSAA
      * 
      * @param pixel the pixel through to generate the ray for
+     * @param superSample sample index in [0, 16)
      * @returns a ray from the camera position to the middle of the specified pixel
      */
-    inline __device__ Ray getRayThroughPixel(int2 pixel) {
+    inline __device__ Ray getRayThroughPixel(int2 pixel, uint32_t superSample) {
+        float2 superSampleOffset = (make_float2((float)(superSample % 4), (float)(superSample / 4)) - make_float2(1.5f, 1.5f)) * 0.25f;
+        
         // Pixel's offset relative to the center of the screen
-        float2 pixelOffset = make_float2((float)pixel.x, (float)pixel.y) + make_float2(0.5, 0.5) - m_halfResolution;
+        float2 pixelOffset = make_float2((float)pixel.x, (float)pixel.y) + make_float2(0.5f, 0.5f) - m_halfResolution;
         float3 rayDir = normalize(m_viewDir                             +
-                                  m_right * m_pixelSize * pixelOffset.x +
-                                  m_up    * m_pixelSize * pixelOffset.y  );
+                                  m_right * m_pixelSize * (pixelOffset.x + superSampleOffset.x) +
+                                  m_up    * m_pixelSize * (pixelOffset.y + superSampleOffset.y)  );
         return {
             m_position,
             rayDir
