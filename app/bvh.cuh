@@ -90,29 +90,41 @@ private:
     }
 
     /**
-     * Calculate a 30-bit Morton code for the given point in world space
+     * Expand a 20-bit unsigned integer into 60 bits by inserting
+     * 2 zeros after each bit
+     * 
+     * @param v the integer to expand
+     * @returns the expanded value
+     */
+    uint64_t expandBits64(uint64_t v) {
+        return ((uint64_t)(expandBits((uint32_t)((v >>  0) & 0x3FF)) <<  0)) +
+               ((uint64_t)(expandBits((uint32_t)((v >> 10) & 0x3FF))) << 30);
+    }
+
+    /**
+     * Calculate a 62-bit Morton code for the given point in world space
      * normalized w.r.t. the scene's AABB
      * 
      * @param p position with all dimensions in range [0, 1] for which to calculate the Morton code
      * @returns the calculated Morton code
      */
-    uint32_t calculateMortonCode(float3& p) {
-        uint32_t xx = expandBits((uint32_t)(p.x * 1024.0f));
-        uint32_t yy = expandBits((uint32_t)(p.y * 1024.0f));
-        uint32_t zz = expandBits((uint32_t)(p.z * 1024.0f));
+    uint64_t calculateMortonCode(double3& p) {
+        uint64_t xx = expandBits64((uint64_t)(p.x * ((double)(1 << 20) - EPS)));
+        uint64_t yy = expandBits64((uint64_t)(p.y * ((double)(1 << 20) - EPS)));
+        uint64_t zz = expandBits64((uint64_t)(p.z * ((double)(1 << 20) - EPS)));
 
         return (xx << 2) + (yy << 1) + zz;
     }
 
     /**
-     * Cross platform implementation of Count Leading Zeros for 32 bit values
+     * Cross platform implementation of Count Leading Zeros for 64 bit values
      * 
      * @param v the value to count the leading zeros of
      * @returns the number of leading zeros in `v`
      */
-    uint32_t clz(uint32_t v) {
+    uint32_t clz(uint64_t v) {
         uint32_t lz = 0;
-        while (lz < 32 && !(v & (1 << (31 - lz)))) ++lz;
+        while (lz < 64 && !(v & ((uint64_t)1 << ((uint64_t)63 - lz)))) ++lz;
         return lz;
     }
 
@@ -124,7 +136,7 @@ private:
      * @param last last index in the range, inclusive
      * @returns the index of the split position
      */
-    uint32_t findSplit(std::tuple<uint32_t, uint32_t>* sortedMortonCodes, uint32_t first, uint32_t last) {
+    uint32_t findSplit(std::tuple<uint32_t, uint64_t>* sortedMortonCodes, uint32_t first, uint32_t last) {
         auto firstCode = std::get<1>(sortedMortonCodes[first]);
         auto lastCode = std::get<1>(sortedMortonCodes[last]);
 
@@ -134,13 +146,13 @@ private:
         }
 
         // Get the highest differing bit between firstCode and lastCode
-        auto diffBit = 31 - clz(firstCode ^ lastCode);
+        auto diffBit = 63 - clz(firstCode ^ lastCode);
 
         // Search the first code with said bit set to 1
         // TODO: this should ideally be done in O(log(n))
         for (uint32_t i = first + 1; i <= last; ++i) {
             auto code = std::get<1>(sortedMortonCodes[i]);
-            if (code & (1 << diffBit)) return i - 1;
+            if (code & ((uint64_t)1 << diffBit)) return i - 1;
         }
 
         // Unreachable
@@ -171,7 +183,7 @@ public:
         }
 
         // Sort triangle indices based on the Morton code of their AABB's centroid
-        std::vector<std::tuple<uint32_t, uint32_t>> sortedTriangleIndices; // (triangleIndex, mortonCode)
+        std::vector<std::tuple<uint32_t, uint64_t>> sortedTriangleIndices; // (triangleIndex, mortonCode)
 
         for (uint32_t i = 0; i < tris.size(); ++i) {
             // For each triangle, compute its AABB
@@ -186,7 +198,7 @@ public:
             // Then, calculate the Morton code of the centroid of said AABB
             auto centroid = triAABB.lo + (triAABB.hi - triAABB.lo)*0.5;
             auto centroidOffset = centroid - sceneAABB.lo;
-            float3 centroidNormalized = {
+            double3 centroidNormalized = {
                 centroidOffset.x / (sceneAABB.hi - sceneAABB.lo).x,
                 centroidOffset.y / (sceneAABB.hi - sceneAABB.lo).y,
                 centroidOffset.z / (sceneAABB.hi - sceneAABB.lo).z,
@@ -199,7 +211,7 @@ public:
         std::sort(
             sortedTriangleIndices.begin(),
             sortedTriangleIndices.end(),
-            [](const std::tuple<uint32_t, uint32_t>& a, const std::tuple<uint32_t, uint32_t>& b) {
+            [](const std::tuple<uint32_t, uint64_t>& a, const std::tuple<uint32_t, uint64_t>& b) {
                 return std::get<1>(a) < std::get<1>(b);
             }
         );
