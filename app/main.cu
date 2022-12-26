@@ -11,16 +11,23 @@
 #include "cudaviewer.h"
 #include "path_tracing.cuh"
 
-int main() {
+int main(int argc, char* argv[]) {
+    // Parse command line arguments
+    if (argc != 2) {
+        std::cerr << "USAGE: " << argv[0] << " <scene obj file>" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    const char* sceneObjFilename = argv[1];
+
     // Create a Vulkan shared framebuffer
     Framebuffer fb(make_int2(RES_X, RES_Y));
     
     // Load scene from obj
-    std::cout << "Loading scene (" << SCENE << ")...";
+    std::cout << "Loading scene (" << sceneObjFilename << ")...";
     std::cout.flush();
     
     Scene scene;
-    if (!scene.load(SCENE, make_int2(RES_X, RES_Y))) {
+    if (!scene.load(sceneObjFilename, make_int2(RES_X, RES_Y))) {
         exit(EXIT_FAILURE);
     }
 

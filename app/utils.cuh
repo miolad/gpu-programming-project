@@ -10,8 +10,6 @@
 #define RES_X                       800
 /// @brief Vertical resolution of the framebuffer
 #define RES_Y                       600
-/// @brief Scene to load
-#define SCENE                       "scenes/cornell_box_dragon.obj"
 /// @brief Approximation of zero, needed to deal with possible rounding errors in floating point arithmetic
 #define EPS                         0.000001f
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
