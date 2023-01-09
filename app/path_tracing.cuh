@@ -123,7 +123,6 @@ __global__ void __launch_bounds__(16*16) pathTrace(
         auto intersectionTri = cameraBounceIntersectionTri;
         auto t = ti;
 
-        // Note that `bounce` starts at 1 because the first camera ray is cached for all samples in the batch
         // #pragma unroll // This unroll hurts performance for some reason
         for (uint32_t bounce = 0; bounce <= MAX_BOUNCES; ++bounce) {
             // Get new ray

@@ -102,10 +102,7 @@ inline __device__ float3 sampleLight(
     };
 
     // Compute the cosine of the angle between the hit normal and the sample direction
-    auto dotnw = dot(sampleDirection, n);
-
-    // Check if the sample is behind the current hit
-    if (dotnw < 0.0f) return make_float3(0.0f, 0.0f, 0.0f);
+    auto dotnw = clamp(dot(sampleDirection, n), 0.0f, 1.0f);
 
     auto vis = visibility(r, tris + lightIndex, tris, triNum
 #ifndef NO_BVH
