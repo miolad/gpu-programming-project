@@ -93,9 +93,6 @@ inline __device__ float3 sampleLight(
     float solidAngle;
     auto sampleDirection = sampleTriangleUniformSolidAngle(randState, samplePosition, tris[lightIndex], &solidAngle);
 
-    // Check for NaN (TODO: this is not great)
-    if (sampleDirection.x != sampleDirection.x) return make_float3(0.0f, 0.0f, 0.0f);
-    
     Ray r = {
         samplePosition,
         sampleDirection
@@ -104,7 +101,7 @@ inline __device__ float3 sampleLight(
     // Compute the cosine of the angle between the hit normal and the sample direction
     auto dotnw = clamp(dot(sampleDirection, n), 0.0f, 1.0f);
 
-    auto vis = visibility(r, tris + lightIndex, tris, triNum
+    auto vis = visibility(r, currentHit, tris + lightIndex, tris, triNum
 #ifndef NO_BVH
         , bvhRoot,
         bvhCache,
@@ -112,7 +109,9 @@ inline __device__ float3 sampleLight(
 #endif
     );
     
-    return mats[tris[lightIndex].materialIndex].emissivity                * // emissivity
+    // Check for NaN (TODO: this is not great)
+    return sampleDirection.x != sampleDirection.x ? make_float3(0.0f, 0.0f, 0.0f) : 
+           mats[tris[lightIndex].materialIndex].emissivity                * // emissivity
            (vis ? 1.0f : 0.0f)                                            * // visibility
            dotnw                                                          * // cosine term
            solidAngle;                                                      // 1/pdf of sample

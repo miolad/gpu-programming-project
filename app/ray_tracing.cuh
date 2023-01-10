@@ -25,24 +25,15 @@ inline __device__ float rayTriangleIntersection(Ray& r, const Triangle& tri) {
     auto h = cross(r.direction, edge2);
     auto a = dot(edge1, h);
 
-    if (a > -EPS && a < EPS)
-        return -1.0f;
-
     auto f = 1.0f / a;
     auto s = r.origin - tri.v1;
     auto u = f * dot(s, h);
 
-    if (u < 0.0f || u > 1.0f)
-        return -1.0f;
-
     auto q = cross(s, edge1);
     auto v = f * dot(r.direction, q);
 
-    if (v < 0.0f || u + v > 1.0f)
-        return -1.0f;
-
     auto t = f * dot(edge2, q);
-    return t > EPS ? t : -1.0f;
+    return (a < -EPS || a > EPS) && (u >= 0.0f && u <= 1.0f) && (v >= 0.0f && u + v <= 1.0f) && (t > EPS) ? t : -1.0f;
 }
 
 #ifndef NO_BVH
@@ -91,6 +82,7 @@ inline __device__ float rayAABBIntersection(Ray& r, const AABB& aabb) {
  * @param r the ray
  * @param tris list of all the triangles
  * @param triNum number of triangles pointed to by `tris`
+ * @param from triangle the ray is originating from, or NULL
  * @param bvhRoot root node of the BVH
  * @param bvhCache cache of the BVH in shared memory
  * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
@@ -101,6 +93,7 @@ inline __device__ void findClosestIntersection(
     Ray& r,
     const Triangle* tris,
     uint32_t triNum,
+    const Triangle* from,
     const Node* bvhRoot,
     const Node* bvhCache,
     uint32_t bvhCachedNodesNum,
@@ -125,7 +118,8 @@ inline __device__ void findClosestIntersection(
 
         auto aabbIntersectionL = aabbIntersectionTL > -0.5f && aabbIntersectionTL < *t;
         if (aabbIntersectionL && childL->type == LEAF_NODE) {
-            auto ti = rayTriangleIntersection(r, tris[childL->node.leaf.triangleIndex]);
+            auto tri = tris + childL->node.leaf.triangleIndex;
+            auto ti = from != tri ? rayTriangleIntersection(r, *tri) : -1.0f;
             if (ti > 0.0f && ti < *t) {
                 *t = ti;
                 *intersectionTri = const_cast<Triangle*>(tris + childL->node.leaf.triangleIndex);
@@ -133,7 +127,8 @@ inline __device__ void findClosestIntersection(
         }
         auto aabbIntersectionR = aabbIntersectionTR > -0.5f && aabbIntersectionTR < *t;
         if (aabbIntersectionR && childR->type == LEAF_NODE) {
-            auto ti = rayTriangleIntersection(r, tris[childR->node.leaf.triangleIndex]);
+            auto tri = tris + childR->node.leaf.triangleIndex;
+            auto ti = from != tri ? rayTriangleIntersection(r, *tri) : -1.0f;
             if (ti > 0.0f && ti < *t) {
                 *t = ti;
                 *intersectionTri = const_cast<Triangle*>(tris + childR->node.leaf.triangleIndex);
@@ -160,10 +155,18 @@ inline __device__ void findClosestIntersection(
  * @param r the ray
  * @param tris list of all the triangles
  * @param triNum number of triangles pointed to by `tris`
+ * @param from triangle the ray is originating from, or NULL
  * @param intersectionTri (out) pointer to the closest triangle intersected, or NULL if no intersection was found
  * @param t (out) "time" of the ray to the closest intersection. This is invalid if intersectionTri is NULL
  */
-inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uint32_t triNum, Triangle** intersectionTri, float* t) {
+inline __device__ void findClosestIntersection(
+    Ray& r,
+    const Triangle* tris,
+    uint32_t triNum,
+    const Triangle* from,
+    Triangle** intersectionTri,
+    float* t
+) {
     *t = RAY_MAX_T;
     *intersectionTri = NULL;
     
@@ -171,7 +174,7 @@ inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uin
     // neither positive nor negative
     // #pragma unroll 4
     for (uint32_t i = 0; i < triNum; ++i) {
-        auto ti = rayTriangleIntersection(r, tris[i]);
+        auto ti = from != tris + i ? rayTriangleIntersection(r, tris[i]) : -1.0f;
 
         if (ti > 0.0f && ti < *t) {
             *t = ti;
@@ -187,6 +190,7 @@ inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uin
  * Checks if a given ray hits a specific triangle first
  * 
  * @param r the ray
+ * @param from triangle the ray is originating from, or NULL
  * @param to the destination triangle
  * @param tris list of all the triangles
  * @param triNum number of triangles pointed to by `tris`
@@ -197,6 +201,7 @@ inline __device__ void findClosestIntersection(Ray& r, const Triangle* tris, uin
  */
 inline __device__ bool visibility(
     Ray& r,
+    const Triangle* from,
     const Triangle* to,
     const Triangle* tris,
     uint32_t triNum,
@@ -205,7 +210,7 @@ inline __device__ bool visibility(
     uint32_t bvhCachedNodesNum
 ) {
     // Get the intersection point of the ray with the destination triangle
-    auto maxT = rayTriangleIntersection(r, *to) - EPS;
+    auto maxT = rayTriangleIntersection(r, *to);
     
     const Node* stack[64];
     const Node** stackPtr = stack;
@@ -222,12 +227,16 @@ inline __device__ bool visibility(
 
         auto aabbIntersectionL = aabbIntersectionTL > -0.5f && aabbIntersectionTL < maxT;
         if (aabbIntersectionL && childL->type == LEAF_NODE) {
-            auto ti = rayTriangleIntersection(r, tris[childL->node.leaf.triangleIndex]);
+            auto tri = tris + childL->node.leaf.triangleIndex;
+            auto ti = from != tri && to != tri ?
+                rayTriangleIntersection(r, tris[childL->node.leaf.triangleIndex]) : -1.0f;
             if (ti > 0.0f && ti < maxT) return false;
         }
         auto aabbIntersectionR = aabbIntersectionTR > -0.5f && aabbIntersectionTR < maxT;
         if (aabbIntersectionR && childR->type == LEAF_NODE) {
-            auto ti = rayTriangleIntersection(r, tris[childR->node.leaf.triangleIndex]);
+            auto tri = tris + childR->node.leaf.triangleIndex;
+            auto ti = from != tri && to != tri ?
+                rayTriangleIntersection(r, tris[childR->node.leaf.triangleIndex]) : -1.0f;
             if (ti > 0.0f && ti < maxT) return false;
         }
 
@@ -250,17 +259,19 @@ inline __device__ bool visibility(
  * Checks if a given ray hits a specific triangle first
  * 
  * @param r the ray
+ * @param from triangle the ray is originating from, or NULL
  * @param to the destination triangle
  * @param tris list of all the triangles
  * @param triNum number of triangles pointed to by `tris`
  * @returns true if there is visibility between the two points, false otherwise
  */
-inline __device__ bool visibility(Ray& r, const Triangle* to, const Triangle* tris, uint32_t triNum) {
+inline __device__ bool visibility(Ray& r, const Triangle* from, const Triangle* to, const Triangle* tris, uint32_t triNum) {
     // Get the intersection point of the ray with the destination triangle
-    auto maxT = rayTriangleIntersection(r, *to) - EPS;
+    auto maxT = rayTriangleIntersection(r, *to);
 
     for (uint32_t i = 0; i < triNum; ++i) {
-        auto ti = rayTriangleIntersection(r, tris[i]);
+        auto ti = from != tris + i && to != tris + i ?
+            rayTriangleIntersection(r, tris[i]) : -1.0f;
 
         if (ti > 0.0f && ti < maxT) return false;
     }
