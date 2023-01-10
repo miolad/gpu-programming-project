@@ -10,10 +10,8 @@
 #define RES_X                       800
 /// @brief Vertical resolution of the framebuffer
 #define RES_Y                       600
-#ifndef EPS
 /// @brief Approximation of zero, needed to deal with possible rounding errors in floating point arithmetic
 #define EPS                         0.000001f
-#endif
 /// @brief Maximum ray time. This clamps the maximum size of a scene in world units
 #define RAY_MAX_T                   99999999.0f
 /// @brief Number of samples to compute for each invocation of the main kernel

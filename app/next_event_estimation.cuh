@@ -65,6 +65,7 @@ inline __device__ float3 sampleTriangleUniformSolidAngle(curandState* randState,
  * @param tris list of all the triangles in the scene
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
+ * @param from triangle the ray is originating from, or NULL
  * @param bvhRoot root node of the BVH
  * @param bvhCache cache of the BVH in shared memory
  * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
@@ -79,6 +80,7 @@ inline __device__ float3 sampleLight(
     const Triangle* tris,
     const Material* mats,
     uint32_t triNum,
+    const Triangle* from,
 #ifndef NO_BVH
     const Node* bvhRoot,
     const Node* bvhCache,
@@ -104,7 +106,7 @@ inline __device__ float3 sampleLight(
     // Compute the cosine of the angle between the hit normal and the sample direction
     auto dotnw = clamp(dot(sampleDirection, n), 0.0f, 1.0f);
 
-    auto vis = visibility(r, tris + lightIndex, tris, triNum
+    auto vis = visibility(r, from, tris + lightIndex, tris, triNum
 #ifndef NO_BVH
         , bvhRoot,
         bvhCache,
@@ -125,6 +127,7 @@ inline __device__ float3 sampleLight(
  * @param tris list of all the triangles in the scene
  * @param mats list of all the materials in the scene
  * @param triNum number of triangles pointed to by `tris`
+ * @param from triangle the ray is originating from, or NULL
  * @param bvhRoot root node of the BVH
  * @param bvhCache cache of the BVH in shared memory
  * @param bvhCachedNodesNum number of nodes of the BVH in the shared memory cache
@@ -140,6 +143,7 @@ inline __device__ float3 sampleLights(
     const Triangle* tris,
     const Material* mats,
     uint32_t triNum,
+    const Triangle* from,
 #ifndef NO_BVH
     const Node* bvhRoot,
     const Node* bvhCache,
@@ -166,7 +170,7 @@ inline __device__ float3 sampleLights(
 
     // Note that we multiply by lightsNum. That is because we are sampling only one random light, and not
     // all lightsNum of them
-    return (float)lightsNum * sampleLight(randState, tris, mats, triNum,
+    return (float)lightsNum * sampleLight(randState, tris, mats, triNum, from,
 #ifndef NO_BVH
         bvhRoot,
         bvhCache,

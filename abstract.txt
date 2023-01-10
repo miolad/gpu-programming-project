@@ -1,0 +1,9 @@
+The project aims to explore ray tracing in CUDA by building a progressive path tracer, i.e. an unbiased, Monte Carlo based approach to
+solve the rendering equation (Immel et al., Kajiya, 1986) by shooting millions of rays through a virtual camera, bouncing them across
+the scene's geometry according to the surfaces' material properties, and accumulating their contribution to progressively clean
+up the rendering artifact.
+The CUDA program will receive as input the description of the scene and virtual camera properties through an obj+mtl file combo,
+and produce as output a live view of the converging image (path tracing) by leveraging the CUDA capabilities of interoperating with the Vulkan
+graphics API.
+Special consideration will then be given to assessing the performance improvement yielded by employing a BVH (Bounding Volume Hierarchy) -
+an industry-standard, scalable acceleration structure used to speed up ray tracing - with respect to a brute force ray-geometry implementation.

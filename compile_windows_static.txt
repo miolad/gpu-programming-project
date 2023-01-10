@@ -1,0 +1,1 @@
+nvcc main.cu lodepng.cpp -L..\cuda-viewer\target\release -o app.exe -use_fast_math -arch=compute_75 -lcuda -lcuda_viewer -lkernel32 -luser32 -ladvapi32 -luserenv -lws2_32 -lbcrypt -lmsvcrt -llegacy_stdio_definitions -lOle32 -lWinmm -lGdi32 -luxtheme -limm32 -ldwmapi --linker-options=/NODEFAULTLIB:libcmt.lib
