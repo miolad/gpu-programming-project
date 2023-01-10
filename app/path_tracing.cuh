@@ -97,7 +97,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
     // Cache first bounce for all samples in this batch
     Triangle* cameraBounceIntersectionTri;
     float ti;
-    findClosestIntersection(cameraRay, tris, triNum, NULL,
+    findClosestIntersection(cameraRay, tris, triNum,
 #ifndef NO_BVH
         bvhRoot,
         s_bvhCache,
@@ -127,7 +127,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
         for (uint32_t bounce = 0; bounce <= MAX_BOUNCES; ++bounce) {
             // Get new ray
             auto n      = (dot(r.direction, intersectionTri->normal) < 0.0f ? 1.0f : -1.0f) * intersectionTri->normal;
-            r.origin    = r.origin + r.direction * t;
+            r.origin    = r.origin + r.direction * t + n * EPS; // Shift ray origin by a small amount to avoid self intersections due to floating point precision
             r.direction = sampleHemisphereCosineWeighted(&randState, n);
 
 #ifndef NO_NEXT_EVENT_ESTIMATION
@@ -137,7 +137,6 @@ __global__ void __launch_bounds__(16*16) pathTrace(
                 tris,
                 mats,
                 triNum,
-                intersectionTri,
 #ifndef NO_BVH
                 bvhRoot,
                 s_bvhCache,
@@ -156,7 +155,7 @@ __global__ void __launch_bounds__(16*16) pathTrace(
 #endif
             
             // Intersect ray with geometry
-            findClosestIntersection(r, tris, triNum, intersectionTri,
+            findClosestIntersection(r, tris, triNum,
 #ifndef NO_BVH
                 bvhRoot,
                 s_bvhCache,
