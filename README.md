@@ -1,6 +1,6 @@
 # [GPU Programming 2022/23] CUDA Path Tracer
 
-![sample render](images/cornell_box_sponza.png "Cornell box with Stanford dragon (~100k triangles) rendered on our path tracer")
+![sample render](images/cornell_box_dragon.png "Cornell box with Stanford dragon (~100k triangles) rendered on our path tracer")
 
 This is a path tracer written in CUDA for the _GPU Programming_ course at Politecnico di Torino, developed by Davide Miola and Cristiano Canepari.
 
@@ -8,7 +8,7 @@ This is a path tracer written in CUDA for the _GPU Programming_ course at Polite
 
 - Full unbiased progressive path tracing of arbitrary triangle meshes
 - Scene loading from obj+mtl file combo
-- Supports loading camera parameters (like position, orientation and horizontal FoV) from the obj file
+- Supports loading camera parameters (like position, orientation and horizontal FoV) from the .obj file (see [Camera parameters](#camera-parameters))
 - Perfectly diffuse materials (Lambertian BRDF)
 - Real time framebuffer output to screen via CUDA-Vulkan interop
 - Encode result to PNG file on exit
@@ -26,7 +26,7 @@ The program requires an Nvidia GPU compatible with CUDA 10.2 (only if doing Vulk
 
 ## Compilation
 
-_Note: the Vulkan interface of the app is a Rust library (`cuda-viewer`), which is then linked (dynamically or statically) to the main program by NVCC._
+_Note: the Vulkan interface of the app is a Rust library (`cuda-viewer`), which is then linked (dynamically or statically) against the main program by NVCC._
 
 ### Native compilation for Windows and Linux hosts
 
@@ -55,13 +55,13 @@ _Note: the Vulkan interface of the app is a Rust library (`cuda-viewer`), which 
                 cd app
                 nvcc main.cu lodepng.cpp -l"cuda_viewer.dll" -lcuda -I. -L..\cuda-viewer\target\release -use_fast_math -o app.exe
 
-            The required dll can then be found in `cuda-viewer/target/release/cuda_viewer.dll`
+            The required .dll can then be found in `cuda-viewer/target/release/cuda_viewer.dll`
         - Linux
         
                 cd app
                 nvcc main.cu lodepng.cpp -lcuda_viewer -lcuda -I. -L../cuda-viewer/target/release -use_fast_math -o app
 
-            The required so can then be found in `cuda-viewer/target/release/libcuda_viewer.so`
+            The required .so can then be found in `cuda-viewer/target/release/libcuda_viewer.so`
 
     - Static linking
 
@@ -94,6 +94,12 @@ To ease the build process for the Jetson Nano platform, we provide a convenient 
 
 At this point the compiled program can be found in `path/to/project/root/app/app`, and can be loaded directly on a Jetson Nano.
 
+### Notes on running on the Jetson Nano
+
+Since the Vulkan viewer requires a running X server, you'll need to run your Jetson Nano in standalone mode.
+
+Also, the Nvidia L4T distro running on the Nano has a 5 second limit on every CUDA kernel active by default, which this program is very likely to exceed with any but the simplest scenes. Because of this, you are advised to disable the GPU watchdog with the instructions found [here](https://forums.developer.nvidia.com/t/kernel-launch-timeout/192904/12).
+
 ## Compilation switches
 
 Some features can be disabled through defines at compile time:
@@ -102,3 +108,27 @@ Some features can be disabled through defines at compile time:
 - `NO_BVH`: disables the _Axis Aligned Bounding Box-based Bounding Volume Hierarchy_, which is an acceleration structure used to speed up ray traversal and allow to scale to scenes with millions of triangles.
 
 Other configuration options, like resolution and minimum/maximum number of bounces per light ray, are available in `app/utils.cuh`.
+
+## Camera parameters
+
+The virtual camera that "_takes the picture_" of the scene has a lot of parameters, which can be embedded into the .obj containing the scene's geometry. If no such data is found when loading the model, a default camera is used instead, which is probably not what you want.
+
+The format for specifying these parameters in the following:
+
+```
+g cameraParameters
+# position
+v <x> <y> <z>
+# up direction
+v <x> <y> <z>
+# view direction
+v <x> <y> <z>
+# horizontal FoV
+v <hfov> <doesn't matter> <doesn't matter>
+p -4
+p -3
+p -2
+p -1
+```
+
+Put the above snippet at the end of your .obj and change the required values (inside angle brackets) to fit your needs.
