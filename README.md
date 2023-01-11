@@ -131,4 +131,4 @@ p -2
 p -1
 ```
 
-Put the above snippet at the end of your .obj and change the required values (inside angle brackets) to fit your needs.
+Put the above snippet at the end of your .obj and substitute the placeholders inside angle brackets with the values of your virtual camera.
