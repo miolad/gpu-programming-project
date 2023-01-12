@@ -131,4 +131,14 @@ p -2
 p -1
 ```
 
-Put the above snippet at the end of your .obj and substitute the placeholders inside angle brackets with the values of your virtual camera.
+Put the above snippet at the end of your .obj and substitute the placeholders inside angle brackets with the values of your virtual camera (see provided scenes in `app/scenes` for examples).
+
+## Repository structure
+
+| Folder | Contents |
+| - | - |
+| `app` | Main CUDA path tracer source |
+| `app/scenes` | Sample scenes |
+| `build-jetson-nano` | Dockerfile for building for Jetson Nano |
+| `cuda-viewer` | Rust crate for Vulkan-based viewer |
+| `images` | Images embedded in this README |
