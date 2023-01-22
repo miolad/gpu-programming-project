@@ -177,8 +177,8 @@ __global__ void __launch_bounds__(16*16) pathTrace(
 
             // Add surface contribution to path throughput
             // Note that a lot of stuff cancels out here, due to the simple diffuse surface constraint.
-            // In particular, the PI at the denominator of the Lambertian BRDF cancels out with the numerator
-            // of the cosine weighted PDF, whose denominator in turn cancels out with the rendering equation's
+            // In particular, the PI at the denominator of the Lambertian BRDF cancels out with the denominator
+            // of the cosine weighted PDF, whose numerator in turn cancels out with the rendering equation's
             // cosine term.
             throughput = throughput * mat->albedo;
 

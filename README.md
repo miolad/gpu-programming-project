@@ -13,7 +13,7 @@ This is a path tracer written in CUDA for the _GPU Programming_ course at Polite
 - Real time framebuffer output to screen via CUDA-Vulkan interop
 - Encode result to PNG file on exit
 - 4x SuperSampling AntiAliasing
-- Next-event estimation (a.k.a. direct light sampling) for faster convergence
+- Next-event estimation (a.k.a. explicit light sampling) for faster convergence
 - BVH acceleration structure for speeding up ray tracing
 
 The renderer achieves **indistinguishable results compared to production-grade render engines like Blender Cycles** (within the implemented features contraint, i.e. perfectly diffuse materials only), with **comparable performance** (in samples per second).
@@ -104,7 +104,7 @@ Also, the Nvidia L4T distro running on the Nano has a 5 second limit on every CU
 
 Some features can be disabled through defines at compile time:
 
-- `NO_NEXT_EVENT_ESTIMATION`: disables _next event estimation_, a.k.a. _direct light sampling_, used to explicitly sample lights in the scene, thus greatly speeding up convergence, especially for smaller light sources. Without it, lights can only be reached by randomly bouncing around the scene.
+- `NO_NEXT_EVENT_ESTIMATION`: disables _next event estimation_, a.k.a. _explicit light sampling_, used to explicitly sample lights in the scene, thus greatly speeding up convergence, especially for smaller light sources. Without it, lights can only be reached by randomly bouncing around the scene.
 - `NO_BVH`: disables the _Axis Aligned Bounding Box-based Bounding Volume Hierarchy_, which is an acceleration structure used to speed up ray traversal and allow to scale to scenes with millions of triangles.
 
 Other configuration options, like resolution and minimum/maximum number of bounces per light ray, are available in `app/utils.cuh`.
