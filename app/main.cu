@@ -13,11 +13,12 @@
 
 int main(int argc, char* argv[]) {
     // Parse command line arguments
-    if (argc != 2) {
-        std::cerr << "USAGE: " << argv[0] << " <scene obj file>" << std::endl;
+    if (argc < 2 || argc > 3) {
+        std::cerr << "USAGE: " << argv[0] << " <scene obj file> [<target sample count>]" << std::endl;
         exit(EXIT_FAILURE);
     }
     const char* sceneObjFilename = argv[1];
+    const uint32_t targetSamples = argc == 3 ? atoi(argv[2]) : 0;
 
     // Create a Vulkan shared framebuffer
     Framebuffer fb(make_int2(RES_X, RES_Y));
@@ -67,25 +68,45 @@ int main(int argc, char* argv[]) {
 #endif
     ;
 
+    uint32_t currentSamples = 0;
+    cudaEvent_t eventStart, eventEnd;
+    checkCudaErrors(cudaEventCreate(&eventStart));
+    checkCudaErrors(cudaEventCreate(&eventEnd));
+    checkCudaErrors(cudaEventRecord(eventStart));
+
     while (true) {
         checkCudaErrors(cudaEventRecord(event));
-        pathTrace<<<gridSize, blockSize, sharedMemoryAmount>>>(
-            scene.m_devTriangles,
-            scene.m_devMaterials,
-            scene.m_numTriangles,
+
+        if (targetSamples == 0 || currentSamples < targetSamples) {
+            pathTrace<<<gridSize, blockSize, sharedMemoryAmount>>>(
+                scene.m_devTriangles,
+                scene.m_devMaterials,
+                scene.m_numTriangles,
 #ifndef NO_BVH
-            scene.m_bvh->m_devRoot,
-            bvhCachedNodesNum,
+                scene.m_bvh->m_devRoot,
+                bvhCachedNodesNum,
 #endif
 #ifndef NO_NEXT_EVENT_ESTIMATION
-            scene.m_devLights,
-            scene.m_numLights,
+                scene.m_devLights,
+                scene.m_numLights,
 #endif
-            *scene.m_camera,
-            batch++,
-            fb.m_devPtr
-        );
-        checkCudaErrors(cudaGetLastError());
+                *scene.m_camera,
+                batch++,
+                fb.m_devPtr
+            );
+            checkCudaErrors(cudaGetLastError());
+
+            currentSamples += SAMPLES_PER_BATCH;
+            if (targetSamples != 0 && currentSamples >= targetSamples) {
+                float elapsed;
+                
+                checkCudaErrors(cudaEventRecord(eventEnd));
+                checkCudaErrors(cudaEventSynchronize(eventEnd));
+                checkCudaErrors(cudaEventElapsedTime(&elapsed, eventStart, eventEnd));
+
+                std::cout << "DONE: " << currentSamples << " samples in " << elapsed / 1000.f << " seconds" << std::endl;
+            }
+        }
 
         // Run the viewer's event loop while we wait to resubmit the CUDA kernel
         bool shouldClose = false;

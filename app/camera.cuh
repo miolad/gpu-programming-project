@@ -52,7 +52,7 @@ public:
         
         // Pixel's offset relative to the center of the screen
         float2 pixelOffset = make_float2((float)pixel.x, (float)pixel.y) + make_float2(0.5f, 0.5f) - m_halfResolution;
-        float3 rayDir = normalize(m_viewDir                             +
+        float3 rayDir = normalize(m_viewDir                              +
                                   m_right * m_pixelSize * (pixelOffset.x + superSampleOffset.x) +
                                   m_up    * m_pixelSize * (pixelOffset.y + superSampleOffset.y)  );
         return {
