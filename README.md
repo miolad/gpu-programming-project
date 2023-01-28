@@ -139,7 +139,8 @@ Put the above snippet at the end of your .obj and substitute the placeholders in
 | - | - |
 | `app` | Main CUDA path tracer source |
 | `app/scenes` | Sample scenes |
-| `app/scenes/blend` | Blender projects for some sample scenes. Just open them and press F12 to render the same image you'd get with our path tracer! |
+| `app/scenes/blend` | Blender projects for the sample scenes. Just open them and press F12 to render the same image you'd get with our path tracer! |
 | `build-jetson-nano` | Dockerfile for building for Jetson Nano |
 | `cuda-viewer` | Rust crate for Vulkan-based viewer |
 | `images` | Images embedded in this README |
+| `report` | LaTeX source for the report |
